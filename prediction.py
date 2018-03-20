@@ -1,13 +1,11 @@
-from keras.models import Sequential, load_model
-import numpy as np
 import argparse
 
+import numpy as np
+from keras.models import Sequential, load_model
+
+from text_data import FIRST_SENTENCE, CHAR_INDEX, INDEX_CHAR, NB_CHARS
 from params import PRED_LEN, SEQ_LEN
-from data import FIRST_SENTENCE, CHAR_INDEX, INDEX_CHAR, NB_CHARS
 from processing import encode
-
-
-#np.random.seed(80)
 
 
 # Sampling dans la distribution de probabilités prédite
@@ -58,8 +56,8 @@ def predict_activations(complete_model, predicted_paragraph, tar_layer):
         partial_model.add(complete_model.layers[l])
     partial_model.compile(loss='categorical_crossentropy', optimizer='adam')
     # Récupération des outputs de la couche à chaque caractère prédit
-    for i in range(len(predicted_paragraph)-SEQ_LEN):
-        sentence = predicted_paragraph[i:i+SEQ_LEN]
+    for i in range(len(predicted_paragraph) - SEQ_LEN):
+        sentence = predicted_paragraph[i:i + SEQ_LEN]
         act = predict_single_input(partial_model, sentence)
         activations.append(act)
     activations = np.transpose(activations)
@@ -81,10 +79,8 @@ parser.add_argument('model', help='model used to generate text')
 parser.add_argument('-t', '--temperature', help='temperature for sampling', type=float)
 args = parser.parse_args()
 
-
 # Charger le modèle à utiliser
 MODEL = load_model(args.model)
-
 
 # Fixer la température pour le sampling
 if args.temperature is not None:
@@ -92,11 +88,9 @@ if args.temperature is not None:
 else:
     TEMP = 0.2
 
-
 # Prediction
 paragraph = predict_paragraph(PRED_LEN, MODEL, True, TEMP)
 print(paragraph)
-
 
 '''
 # Prédire plusieurs paragraphes
@@ -113,4 +107,5 @@ with open("example/pars.txt", "w") as f:
 
 # Activations
 net_acts = all_activations(MODEL, paragraph)
-np.save("example/activations.npy", net_acts)'''
+np.save("example/activations.npy", net_acts)
+'''

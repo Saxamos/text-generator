@@ -1,19 +1,22 @@
-### Scraping
+### Setup
 
-* Installer Scrapy et se placer dans le dossier
+* Créer un venv, se placer dedans et installer les requirements avec :
 ```
-conda install scrapy
-cd scraping/spiders
+python3.6 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
+
+### Scraping
 
 * Scraper les liens vers chaque discours et les stocker dans un JSON
 ```
-scrapy runspider speechlinks_spider.py links.json
+scrapy crawl links -o links.json
 ```
 
 * Scraper les discours en entier via leurs liens
 ```
-scrapy runspider speech_spider.py speeches.json
+scrapy crawl speech -o speeches.json
 ```
 
 ### Modèle

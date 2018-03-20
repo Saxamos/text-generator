@@ -1,0 +1,6 @@
+scrapy
+numpy
+tensorflow
+keras
+pytest
+unidecode
