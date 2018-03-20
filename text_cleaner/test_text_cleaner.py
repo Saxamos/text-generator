@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from text_cleaner.text_cleaner import sanitize
 
 
