@@ -4,3 +4,5 @@ tensorflow
 keras
 pytest
 unidecode
+floyd-cli
+h5py
