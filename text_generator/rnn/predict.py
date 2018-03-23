@@ -16,3 +16,7 @@ if args.temperature:
 # Prediction
 text_prediction = predict_paragraph(PRED_LEN, MODEL, True, tempeature)
 print(text_prediction)
+
+
+# TODO: faire tourner sur gpu https://www.floydhub.com/
+# TODO: utiliser http://click.pocoo.org/5/

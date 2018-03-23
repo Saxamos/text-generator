@@ -64,8 +64,3 @@ model.fit(x_train_sequence, y_train_sequence, batch_size=BATCH_SIZE, epochs=NB_I
           callbacks=callbacks_list, verbose=1)
 print('*******************************')
 print('Model fitted')
-
-
-
-# TODO: faire tourner sur gpu https://www.floydhub.com/
-# ASK VELTIN pour import pytest sinon python -m ...
