@@ -6,14 +6,14 @@ from keras.callbacks import ModelCheckpoint
 from keras.layers import Dense, LSTM, Activation, Dropout
 from keras.models import Sequential, load_model
 
-from text_generator.rnn.data_pre_processor import (get_sequence_of_one_hot_encoded_character,
-                                                   create_sequences_with_associated_labels)
-from text_generator.text_cleaner.text_cleaner import NUMBER_OF_CHARACTERS, TEXT
+from text_generator.rnn.data_pre_processor import (create_sequences_with_associated_labels,
+                                                   get_sequence_of_one_hot_encoded_character)
 
 SEQUENCE_LENGTH = 50
 NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES = 3
-NB_ITERATION = 50
+NB_ITERATION = 5
 BATCH_SIZE = 64
+NUMBER_OF_CHARACTER = len(set(TEXT))
 
 print('*******************************')
 print('One-hot encoding...')
@@ -48,11 +48,11 @@ callbacks_list = [checkpoint]
 # Model
 if args.model is None:
     model = Sequential()
-    model.add(LSTM(256, input_shape=(SEQUENCE_LENGTH, NUMBER_OF_CHARACTERS), return_sequences=True))
+    model.add(LSTM(256, input_shape=(SEQUENCE_LENGTH, NUMBER_OF_CHARACTER), return_sequences=True))
     model.add(Dropout(0.2))
     model.add(LSTM(256))
     model.add(Dropout(0.2))
-    model.add(Dense(NUMBER_OF_CHARACTERS))
+    model.add(Dense(NUMBER_OF_CHARACTER))
     model.add(Activation('softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='adam')
 else:

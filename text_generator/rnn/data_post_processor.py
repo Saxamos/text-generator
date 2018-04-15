@@ -1,3 +1,5 @@
+import numpy as np
+
 from text_generator.rnn.data_pre_processor import get_sequence_of_one_hot_encoded_character
 
 
