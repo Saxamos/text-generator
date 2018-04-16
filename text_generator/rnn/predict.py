@@ -25,10 +25,6 @@ def predict(prediction_length, model):
 text_prediction = predict(PRED_LEN, MODEL, True, TEMPERATURE)
 print(text_prediction)
 
-
 # TODO: faire tourner sur gpu https://www.floydhub.com/
 # TODO: utiliser http://click.pocoo.org/5/
-
-
-
-
+# TODO: https://medium.com/@keeper6928/how-to-unit-test-machine-learning-code-57cf6fd81765
