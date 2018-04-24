@@ -1,8 +1,39 @@
 import numpy as np
 import pytest
 
-from text_generator.rnn.data_pre_processor import (get_sequence_of_one_hot_encoded_character,
-                                                   create_sequences_with_associated_labels)
+from text_generator.data_processor.data_pre_processor import (_get_sequence_of_one_hot_encoded_character,
+                                                              _create_sequences_with_associated_labels,
+                                                              prepare_training_data)
+
+
+class TestPrepareTrainingData:
+    def test_returns_right_x_and_y_train_sequences(self):
+        # Given
+        training_data = 'aaaa bb b\n'
+        character_list_in_training_data = ['\n', ' ', 'a', 'b']
+        sequence_length = 3
+        skip_rate = 3
+
+        # When
+        x_train_sequence, y_train_sequence = prepare_training_data(
+            training_data, character_list_in_training_data, sequence_length, skip_rate)
+
+        # Then
+        np.testing.assert_array_equal(x_train_sequence, [[[False, False, True, False],
+                                                          [False, False, True, False],
+                                                          [False, False, True, False]],
+
+                                                         [[False, False, True, False],
+                                                          [False, True, False, False],
+                                                          [False, False, False, True]],
+
+                                                         [[False, False, False, True],
+                                                          [False, True, False, False],
+                                                          [False, False, False, True]]])
+
+        np.testing.assert_array_equal(y_train_sequence, [[False, False, True, False],
+                                                         [False, False, False, True],
+                                                         [True, False, False, False]])
 
 
 class TestGetSequenceOfOneHotEncodedCharacter:
@@ -12,7 +43,7 @@ class TestGetSequenceOfOneHotEncodedCharacter:
         character_list_in_train_text = ['a', 'b', 's']
 
         # When
-        result = get_sequence_of_one_hot_encoded_character(text_to_convert, character_list_in_train_text)
+        result = _get_sequence_of_one_hot_encoded_character(text_to_convert, character_list_in_train_text)
 
         # Then
         np.testing.assert_array_equal(result, [[0., 0., 1.]])
@@ -23,7 +54,7 @@ class TestGetSequenceOfOneHotEncodedCharacter:
         character_list_in_train_text = ['a', 'b', 's']
 
         # When
-        result = get_sequence_of_one_hot_encoded_character(text_to_convert, character_list_in_train_text)
+        result = _get_sequence_of_one_hot_encoded_character(text_to_convert, character_list_in_train_text)
 
         # Then
         assert np.all(result == [[0., 0., 1.], [1., 0., 0.]])
@@ -34,7 +65,7 @@ class TestGetSequenceOfOneHotEncodedCharacter:
         character_list_in_train_text = ['a', 'b', 'c', 'd', 'm', 's']
 
         # When
-        result = get_sequence_of_one_hot_encoded_character(text_to_convert, character_list_in_train_text)
+        result = _get_sequence_of_one_hot_encoded_character(text_to_convert, character_list_in_train_text)
 
         # Then
         assert np.all(result == [[0., 0., 0., 0., 1., 0.],
@@ -50,7 +81,7 @@ class TestGetSequenceOfOneHotEncodedCharacter:
         bool_type = bool
 
         # When
-        result = get_sequence_of_one_hot_encoded_character(
+        result = _get_sequence_of_one_hot_encoded_character(
             text_to_convert, character_list_in_train_text, dtype=bool_type)
 
         # Then
@@ -66,8 +97,11 @@ class TestGetSequenceOfOneHotEncodedCharacter:
         invalid_character_list_in_train_text = ['a', 'b']
 
         # When
-        with pytest.raises(ValueError):
-            get_sequence_of_one_hot_encoded_character(text_to_convert, invalid_character_list_in_train_text)
+        with pytest.raises(ValueError) as error:
+            _get_sequence_of_one_hot_encoded_character(text_to_convert, invalid_character_list_in_train_text)
+
+        # Then
+        assert str(error.value) == "'m' is not in list"
 
 
 class TestCreateSequencesWithAssociatedLabels:
@@ -83,7 +117,7 @@ class TestCreateSequencesWithAssociatedLabels:
                                       [0., 1.]]
 
         # When
-        x_train_sequence, y_train_sequence = create_sequences_with_associated_labels(
+        x_train_sequence, y_train_sequence = _create_sequences_with_associated_labels(
             one_hot_encoded_input_text, sequence_length, skip_rate)
 
         # Then
@@ -111,7 +145,7 @@ class TestCreateSequencesWithAssociatedLabels:
                                       [1., 0.]]
 
         # When
-        x_train_sequence, y_train_sequence = create_sequences_with_associated_labels(
+        x_train_sequence, y_train_sequence = _create_sequences_with_associated_labels(
             one_hot_encoded_input_text, sequence_length, skip_rate)
 
         # Then
@@ -140,7 +174,7 @@ class TestCreateSequencesWithAssociatedLabels:
                                       [1., 0.]]
 
         # When
-        x_train_sequence, y_train_sequence = create_sequences_with_associated_labels(
+        x_train_sequence, y_train_sequence = _create_sequences_with_associated_labels(
             one_hot_encoded_input_text, sequence_length, skip_rate)
 
         # Then

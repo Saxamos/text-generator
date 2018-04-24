@@ -1,6 +1,6 @@
 import numpy as np
 
-from text_generator.rnn.data_pre_processor import get_sequence_of_one_hot_encoded_character
+from text_generator.neural_network.data_pre_processor import get_sequence_of_one_hot_encoded_character
 
 # parser = argparse.ArgumentParser(description='Generate text with a trained model')
 # parser.add_argument('model', help='Model used to generate text')
@@ -34,8 +34,12 @@ def predict_single_character(model, test_text, character_list_in_train_text):
 # text_prediction = predict(PRED_LEN, MODEL, True, TEMPERATURE)
 # print(text_prediction)
 
+
+# TODO: tester NN
+# TODO: faire predict
+# TODO: tester predict
+
 # TODO: faire tourner sur gpu https://www.floydhub.com/
-# TODO: utiliser http://click.pocoo.org/5/
 # TODO: TU on NN : https://medium.com/@keeper6928/how-to-unit-test-machine-learning-code-57cf6fd81765
 # TODO: CE continuous evaluation : https://medium.com/@rstojnic/continuous-integration-for-machine-learning-6893aa867002
 # TODO: pour la prez : comparaison np.testing.assert_array_equal(df1, df2) || np.all(x_train_sequence == [0., 0.])
