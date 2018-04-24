@@ -1,14 +1,13 @@
 import numpy as np
 
 
-def get_sequence_of_one_hot_encoded_character(text, dtype=float):
+def get_sequence_of_one_hot_encoded_character(text_to_convert, character_list_in_train_text, dtype=float):
     dataset = []
-    character_list = sorted(set(text))
-    number_of_character = len(character_list)
+    number_of_character_in_train_text = len(character_list_in_train_text)
 
-    for character in text:
-        character_representation = np.zeros(number_of_character, dtype=dtype)
-        character_representation[character_list.index(character)] = 1
+    for character in text_to_convert:
+        character_representation = np.zeros(number_of_character_in_train_text, dtype=dtype)
+        character_representation[character_list_in_train_text.index(character)] = 1
         dataset.append(character_representation)
 
     return np.array(dataset)

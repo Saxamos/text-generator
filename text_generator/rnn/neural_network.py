@@ -8,16 +8,17 @@ from keras.models import Sequential, load_model
 
 from text_generator.rnn.data_pre_processor import (create_sequences_with_associated_labels,
                                                    get_sequence_of_one_hot_encoded_character)
+from text_generator.text_cleaner.text_cleaner import CHARACTER_LIST, TRAIN_TEXT
 
 SEQUENCE_LENGTH = 50
 NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES = 3
-NB_ITERATION = 5
+ITERATION_NUMBER = 5
 BATCH_SIZE = 64
-NUMBER_OF_CHARACTER = len(set(TEXT))
+NUMBER_OF_DIFFERENT_CHARACTER = len(set(TRAIN_TEXT))
 
 print('*******************************')
 print('One-hot encoding...')
-one_hot_encoded_character_sequence = get_sequence_of_one_hot_encoded_character(TEXT, bool)
+one_hot_encoded_character_sequence = get_sequence_of_one_hot_encoded_character(TRAIN_TEXT, CHARACTER_LIST, bool)
 print('*******************************')
 print('Characters one-hot encoded')
 
@@ -48,11 +49,11 @@ callbacks_list = [checkpoint]
 # Model
 if args.model is None:
     model = Sequential()
-    model.add(LSTM(256, input_shape=(SEQUENCE_LENGTH, NUMBER_OF_CHARACTER), return_sequences=True))
+    model.add(LSTM(256, input_shape=(SEQUENCE_LENGTH, NUMBER_OF_DIFFERENT_CHARACTER), return_sequences=True))
     model.add(Dropout(0.2))
     model.add(LSTM(256))
     model.add(Dropout(0.2))
-    model.add(Dense(NUMBER_OF_CHARACTER))
+    model.add(Dense(NUMBER_OF_DIFFERENT_CHARACTER))
     model.add(Activation('softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='adam')
 else:
@@ -60,7 +61,7 @@ else:
 
 print('*******************************')
 print('Begining the fitting...')
-model.fit(x_train_sequence, y_train_sequence, batch_size=BATCH_SIZE, epochs=NB_ITERATION,
+model.fit(x_train_sequence, y_train_sequence, batch_size=BATCH_SIZE, epochs=ITERATION_NUMBER,
           callbacks=callbacks_list, verbose=1)
 print('*******************************')
 print('Model fitted')

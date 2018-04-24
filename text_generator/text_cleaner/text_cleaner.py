@@ -20,8 +20,8 @@ with open(INPUT_FILE_NAME) as old, open(OUTPUT_FILE_NAME, 'w') as new:
 print('*******************************')
 print('Input text sanitized')
 
-TEXT = open(OUTPUT_FILE_NAME).read()
-OCCURENCE_OF_CHARACTERS = {character: TEXT.count(character) for character in set(TEXT)}
+TRAIN_TEXT = open(OUTPUT_FILE_NAME).read()
+OCCURENCE_OF_CHARACTERS = {character: TRAIN_TEXT.count(character) for character in set(TRAIN_TEXT)}
 CHARACTER_LIST = sorted(OCCURENCE_OF_CHARACTERS.keys())
 
 for key in sorted(OCCURENCE_OF_CHARACTERS, key=OCCURENCE_OF_CHARACTERS.get, reverse=True):
