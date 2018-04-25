@@ -19,7 +19,7 @@ def load_pre_trained_model(model_path):
     return load_model(model_path)
 
 
-def train_the_model(model, x_train_sequence, y_train_sequence, epoch_number, batch_size):
+def train_the_model(model, x_train_sequences, y_train_sequences, epoch_number, batch_size):
     checkpoint_path = 'models/weights-improvement-{epoch:02d}-{loss:.4f}.hdf5'
     checkpoint = ModelCheckpoint(checkpoint_path, monitor='loss', verbose=1, save_best_only=True, mode='min')
 
@@ -27,8 +27,8 @@ def train_the_model(model, x_train_sequence, y_train_sequence, epoch_number, bat
     print('Begining the training...')
     print('*******************************')
     model.fit(
-        x_train_sequence,
-        y_train_sequence,
+        x_train_sequences,
+        y_train_sequences,
         batch_size=batch_size,
         epochs=epoch_number,
         callbacks=[checkpoint],

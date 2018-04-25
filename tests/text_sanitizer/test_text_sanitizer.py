@@ -31,8 +31,7 @@ class TestReadTrainingData:
                                 "*******************************\n")
 
 
-# TODO: test "sanitize_input_text" with context
-# class TestSanitizeInputText:
+# TODO: comment tester "sanitize_input_text" with context
 
 class TestSanitize:
     def test_reduce_character_cardinal(self):

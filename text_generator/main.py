@@ -1,7 +1,8 @@
 import click
 
-from text_generator.data_processor import data_pre_processor
+from text_generator.data_processor import pre_processor
 from text_generator.neural_network import neural_network
+from text_generator.predictor import predictor
 from text_generator.text_sanitizer import text_sanitizer
 
 INPUT_TEXT_PATH = 'data/zweig_joueur_echecs.txt'
@@ -11,9 +12,9 @@ NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES = 3
 MODEL_PATH = 'models/weights-improvement-01-1.3892.hdf5'
 EPOCH_NUMBER = 50
 BATCH_SIZE = 64
+TEXT_STARTER = 'salut mamene, '
+PREDICTION_LENGTH = 50
 
-
-# TODO: test the main
 
 @click.command()
 @click.option('--input-text-path', default=INPUT_TEXT_PATH, help='Path of the input training text.')
@@ -22,11 +23,13 @@ BATCH_SIZE = 64
 @click.option('--number-of-character-between-sequences', default=NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES)
 @click.option('--number-of-epoch', default=EPOCH_NUMBER, help='Number of iteration for the training part.')
 @click.option('--batch-size', default=BATCH_SIZE, help='Number of sequence by batch.')
+@click.option('--text-starter', default=TEXT_STARTER, help='Beginning of the sentence to be predicted.')
+@click.option('--prediction-length', default=PREDICTION_LENGTH, help='Length of the desired text to predict.')
 def main(**kwargs):
     text_sanitizer.sanitize_input_text(kwargs['input_text_path'], kwargs['sanitized_text_path'])
     training_data, character_list_in_training_data = text_sanitizer.read_training_data(kwargs['sanitized_text_path'])
 
-    x_train_sequence, y_train_sequence = data_pre_processor.prepare_training_data(
+    x_train_sequences, y_train_sequences = pre_processor.prepare_training_data(
         training_data,
         character_list_in_training_data,
         kwargs['sequence_length'],
@@ -40,13 +43,32 @@ def main(**kwargs):
         number_of_unique_character = len(set(training_data))
         model = neural_network.TextGeneratorModel(kwargs['sequence_length'], number_of_unique_character)
 
-    neural_network.train_the_model(
+    if click.confirm('Do you want to train your model?'):
+        neural_network.train_the_model(
+            model,
+            x_train_sequences,
+            y_train_sequences,
+            kwargs['number_of_epoch'],
+            kwargs['batch_size']
+        )
+
+    # text_starter = click.prompt('Please enter a valid integer', type=int)
+    prediction = predictor.predict(
         model,
-        x_train_sequence,
-        y_train_sequence,
-        kwargs['number_of_epoch'],
+        kwargs['text_starter'],
+        kwargs['prediction_length'],
+        character_list_in_training_data,
         kwargs['batch_size']
     )
+    click.echo(click.style(prediction, blink=True, bold=True, bg='white', fg='magenta'))
 
 
 main()
+
+# TODO: tester TestPredictSingleCharacter avec un model a la main fait dans le given
+# TODO: test main
+# TODO: faire tourner sur gpu https://www.floydhub.com/
+# TODO: TU on NN : https://medium.com/@keeper6928/how-to-unit-test-machine-learning-code-57cf6fd81765
+# TODO: CE continuous evaluation : https://medium.com/@rstojnic/continuous-integration-for-machine-learning-6893aa867002
+# TODO: pour la prez : comparaison np.testing.assert_array_equal(df1, df2) || np.all(x_train_sequences == [0., 0.])
+# TODO: générer un fichier audio avec google api
