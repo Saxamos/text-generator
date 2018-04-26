@@ -7,10 +7,10 @@ from text_generator.text_sanitizer import text_sanitizer
 
 INPUT_TEXT_PATH = 'data/zweig_joueur_echecs.txt'
 SANITIZED_TEXT_PATH = 'data/training_data.txt'
-SEQUENCE_LENGTH = 50
+SEQUENCE_LENGTH = 14  # 50
 NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES = 3
-MODEL_PATH = 'models/weights-improvement-01-1.3892.hdf5'
-EPOCH_NUMBER = 50
+MODEL_PATH = 'models/weights-improvement-05-1.7419.hdf5'
+EPOCH_NUMBER = 5  # 50
 BATCH_SIZE = 64
 TEXT_STARTER = 'salut mamene, '
 PREDICTION_LENGTH = 50
@@ -65,10 +65,10 @@ def main(**kwargs):
 
 main()
 
-# TODO: tester TestPredictSingleCharacter avec un model a la main fait dans le given
 # TODO: test main
 # TODO: faire tourner sur gpu https://www.floydhub.com/
 # TODO: TU on NN : https://medium.com/@keeper6928/how-to-unit-test-machine-learning-code-57cf6fd81765
 # TODO: CE continuous evaluation : https://medium.com/@rstojnic/continuous-integration-for-machine-learning-6893aa867002
-# TODO: pour la prez : comparaison np.testing.assert_array_equal(df1, df2) || np.all(x_train_sequences == [0., 0.])
 # TODO: générer un fichier audio avec google api
+
+# TODO: slides R&D : https://docs.google.com/presentation/d/1YgxDk1NiClvcqnynwvw1Rw9wMFWzhkzvgKCiif5nZRs/edit#slide=id.g3874863166_0_30
