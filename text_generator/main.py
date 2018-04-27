@@ -5,15 +5,15 @@ from text_generator.neural_network import neural_network
 from text_generator.predictor import predictor
 from text_generator.text_sanitizer import text_sanitizer
 
-INPUT_TEXT_PATH = 'data/test.txt'  # 'data/zweig_joueur_echecs.txt'
+INPUT_TEXT_PATH = 'data/zweig_joueur_echecs.txt'
 SANITIZED_TEXT_PATH = 'data/training_data.txt'
-SEQUENCE_LENGTH = 20  # 50
+SEQUENCE_LENGTH = 50
 NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES = 3
 MODEL_PATH = 'models/weights-improvement-49-0.0027.hdf5'
-EPOCH_NUMBER = 50  # 50
-BATCH_SIZE = 1  # 64
-TEXT_STARTER = ' ahahahahahah ahahah'  # 'salut mamene, '
-PREDICTION_LENGTH = 50
+EPOCH_NUMBER = 10  # 50
+BATCH_SIZE = 64
+TEXT_STARTER = 'salut mamene, je ne comprends pas bien ce que tu f'
+PREDICTION_LENGTH = 20
 
 
 @click.command()
@@ -52,7 +52,6 @@ def main(**kwargs):
             kwargs['batch_size']
         )
 
-    # text_starter = click.prompt('Please enter a valid integer', type=int)
     prediction = predictor.predict(
         model,
         kwargs['text_starter'],
@@ -65,12 +64,13 @@ def main(**kwargs):
 
 main()
 
+# TODO: path de click
 # TODO: test main click + test main mocké
 # TODO: lien entre sequence size et text starter
 # TODO: problème à la lecture du model
+# TODO: faire un logger
 # TODO: faire tourner sur gpu https://www.floydhub.com/ + evaluation du modèle
 # TODO: TU on NN : https://medium.com/@keeper6928/how-to-unit-test-machine-learning-code-57cf6fd81765
 # TODO: CE continuous evaluation : https://medium.com/@rstojnic/continuous-integration-for-machine-learning-6893aa867002
 # TODO: générer un fichier audio avec google api ?
-
 # TODO: slides R&D : https://docs.google.com/presentation/d/1YgxDk1NiClvcqnynwvw1Rw9wMFWzhkzvgKCiif5nZRs/edit#slide=id.g3874863166_0_30

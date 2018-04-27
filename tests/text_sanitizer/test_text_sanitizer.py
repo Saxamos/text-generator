@@ -2,7 +2,7 @@ from text_generator.text_sanitizer.text_sanitizer import _sanitize, read_trainin
 
 
 class TestReadTrainingData:
-    def test_return_training_data_and_the_associated_list_of_characters(self, capsys):
+    def test_return_training_data_and_the_associated_list_of_characters(self):
         # Given
         sanitized_text_path = 'tests/text_sanitizer/test_training_data.txt'
 
@@ -16,12 +16,12 @@ class TestReadTrainingData:
     def test_capture_the_printed_informations(self, capsys):
         # Given
         sanitized_text_path = 'tests/text_sanitizer/test_training_data.txt'
-        read_training_data(sanitized_text_path)
 
         # When
-        captured = capsys.readouterr()
+        read_training_data(sanitized_text_path)
 
         # Then
+        captured = capsys.readouterr()
         assert captured.out == ("'a' 4\n"
                                 "'b' 3\n"
                                 "' ' 2\n"
