@@ -9,8 +9,8 @@ INPUT_TEXT_PATH = 'data/zweig_joueur_echecs.txt'
 SANITIZED_TEXT_PATH = 'data/training_data.txt'
 SEQUENCE_LENGTH = 50
 NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES = 3
-MODEL_PATH = 'models/weights-improvement-49-0.0027.hdf5'
-EPOCH_NUMBER = 10  # 50
+MODEL_PATH = 'models/weights-improvement-{}.hdf5'
+EPOCH_NUMBER = 50
 BATCH_SIZE = 64
 TEXT_STARTER = 'salut mamene, je ne comprends pas bien ce que tu f'
 PREDICTION_LENGTH = 20
@@ -37,11 +37,11 @@ def main(**kwargs):
     )
 
     if click.confirm('Do you want to use a pre-trained model?', default=True):
-        model_path = click.prompt('Path to the pre-trained model', type=str, default=MODEL_PATH)
-        model = neural_network.load_pre_trained_model(model_path)
+        model_number = click.prompt('Path to the pre-trained model', type=str)
+        model = neural_network.load_pre_trained_model(MODEL_PATH.format(model_number))
     else:
         number_of_unique_character = len(set(training_data))
-        model = neural_network.TextGeneratorModel(kwargs['sequence_length'], number_of_unique_character)
+        model = neural_network.generate_model(kwargs['sequence_length'], number_of_unique_character)
 
     if click.confirm('Do you want to train your model?', default=False):
         neural_network.train_the_model(
@@ -56,8 +56,7 @@ def main(**kwargs):
         model,
         kwargs['text_starter'],
         kwargs['prediction_length'],
-        character_list_in_training_data,
-        kwargs['batch_size']
+        character_list_in_training_data
     )
     click.echo(click.style(prediction, blink=True, bold=True, fg='red'))
 
@@ -66,7 +65,7 @@ main()
 
 # TODO: path de click
 # TODO: test main click + test main mocké
-# TODO: lien entre sequence size et text starter
+# TODO: lien entre sequence size et text starter + plains d'autres règles métiers à implém
 # TODO: problème à la lecture du model
 # TODO: faire un logger
 # TODO: faire tourner sur gpu https://www.floydhub.com/ + evaluation du modèle

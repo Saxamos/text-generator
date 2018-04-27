@@ -3,16 +3,16 @@ from keras.layers import Dense, LSTM, Activation, Dropout
 from keras.models import Sequential, load_model
 
 
-class TextGeneratorModel(Sequential):
-    def __init__(self, sequence_length, number_of_unique_character):
-        super().__init__()
-        self.add(LSTM(256, input_shape=(sequence_length, number_of_unique_character), return_sequences=True))
-        self.add(Dropout(0.2))
-        self.add(LSTM(256))
-        self.add(Dropout(0.2))
-        self.add(Dense(number_of_unique_character))
-        self.add(Activation('softmax'))
-        self.compile(loss='categorical_crossentropy', optimizer='adam')
+def generate_model(sequence_length, number_of_unique_character):
+    model = Sequential()
+    model.add(LSTM(256, input_shape=(sequence_length, number_of_unique_character), return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(256))
+    model.add(Dropout(0.2))
+    model.add(Dense(number_of_unique_character))
+    model.add(Activation('softmax'))
+    model.compile(loss='categorical_crossentropy', optimizer='adam')
+    return model
 
 
 def load_pre_trained_model(model_path):

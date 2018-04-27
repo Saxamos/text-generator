@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from text_generator.neural_network.neural_network import load_pre_trained_model, TextGeneratorModel, train_the_model
+from text_generator.neural_network.neural_network import load_pre_trained_model, train_the_model, generate_model
 from text_generator.predictor.predictor import predict
 
 
@@ -23,8 +23,7 @@ class TestPredict:
             self.model,
             test_text,
             self.prediction_length,
-            self.character_list_in_train_text,
-            self.batch_size
+            self.character_list_in_train_text
         )
 
         # Then
@@ -40,8 +39,7 @@ class TestPredict:
             self.model,
             test_text,
             self.prediction_length,
-            self.character_list_in_train_text,
-            self.batch_size
+            self.character_list_in_train_text
         )
 
         # Then
@@ -53,7 +51,7 @@ class TestPredict:
 
         # When
         with pytest.raises(ValueError) as error:
-            predict(self.model, test_text, self.prediction_length, self.character_list_in_train_text, self.batch_size)
+            predict(self.model, test_text, self.prediction_length, self.character_list_in_train_text)
 
         # Then
         assert str(error.value) == "'a' is not in list"
@@ -64,7 +62,7 @@ class TestPredict:
 
         # When
         with pytest.raises(ValueError) as error:
-            predict(self.model, test_text, self.prediction_length, self.character_list_in_train_text, self.batch_size)
+            predict(self.model, test_text, self.prediction_length, self.character_list_in_train_text)
 
         # Then
         assert str(error.value) == (
@@ -75,7 +73,7 @@ class TestPredictWithNewModel:
     def setup_class(self):
         sequence_length = 3
         self.character_list_in_train_text = ['y', 'z']
-        self.model = TextGeneratorModel(sequence_length, len(self.character_list_in_train_text))
+        self.model = generate_model(sequence_length, len(self.character_list_in_train_text))
         x_train_sequences = np.array([[[1, 0], [0, 1], [0, 1]],
                                       [[1, 0], [0, 1], [0, 1]],
                                       [[1, 0], [1, 0], [0, 1]]])
@@ -94,8 +92,7 @@ class TestPredictWithNewModel:
             self.model,
             test_text,
             self.prediction_length,
-            self.character_list_in_train_text,
-            self.batch_size
+            self.character_list_in_train_text
         )
 
         # Then
@@ -111,8 +108,7 @@ class TestPredictWithNewModel:
             self.model,
             test_text,
             self.prediction_length,
-            self.character_list_in_train_text,
-            self.batch_size
+            self.character_list_in_train_text
         )
 
         # Then
@@ -124,7 +120,7 @@ class TestPredictWithNewModel:
 
         # When
         with pytest.raises(ValueError) as error:
-            predict(self.model, test_text, self.prediction_length, self.character_list_in_train_text, self.batch_size)
+            predict(self.model, test_text, self.prediction_length, self.character_list_in_train_text)
 
         # Then
         assert str(error.value) == "'a' is not in list"
@@ -135,7 +131,7 @@ class TestPredictWithNewModel:
 
         # When
         with pytest.raises(ValueError) as error:
-            predict(self.model, test_text, self.prediction_length, self.character_list_in_train_text, self.batch_size)
+            predict(self.model, test_text, self.prediction_length, self.character_list_in_train_text)
 
         # Then
         assert str(error.value) == (

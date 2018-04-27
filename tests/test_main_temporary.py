@@ -22,7 +22,7 @@ def main(**kwargs):
     #     model = neural_network.load_pre_trained_model(model_path)
     # else:
     number_of_unique_character = len(set(training_data))
-    model = neural_network.TextGeneratorModel(kwargs['sequence_length'], number_of_unique_character)
+    model = neural_network.generate_model(kwargs['sequence_length'], number_of_unique_character)
 
     # if click.confirm('Do you want to train your model?', default=False):
     neural_network.train_the_model(
@@ -38,8 +38,7 @@ def main(**kwargs):
         model,
         kwargs['text_starter'],
         kwargs['prediction_length'],
-        character_list_in_training_data,
-        kwargs['batch_size']
+        character_list_in_training_data
     )
 
     return prediction

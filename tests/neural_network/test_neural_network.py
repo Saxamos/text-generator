@@ -1,7 +1,7 @@
 import numpy as np
 from keras import Sequential
 
-from text_generator.neural_network.neural_network import TextGeneratorModel, load_pre_trained_model, train_the_model
+from text_generator.neural_network.neural_network import load_pre_trained_model, train_the_model, generate_model
 
 
 # TODO: quoi tester d'autre ici ?
@@ -12,7 +12,7 @@ class TestTextGeneratorModel:
         number_of_unique_character = 10
 
         # When
-        result = TextGeneratorModel(sequence_length, number_of_unique_character)
+        result = generate_model(sequence_length, number_of_unique_character)
 
         # Then
         assert isinstance(result, Sequential)
