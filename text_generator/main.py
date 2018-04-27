@@ -5,11 +5,11 @@ from text_generator.neural_network import neural_network
 from text_generator.predictor import predictor
 from text_generator.text_sanitizer import text_sanitizer
 
-INPUT_TEXT_PATH = 'data/zweig_joueur_echecs.txt'
+INPUT_TEXT_PATH = 'data/test.txt'  # 'data/zweig_joueur_echecs.txt'
 SANITIZED_TEXT_PATH = 'data/training_data.txt'
 SEQUENCE_LENGTH = 20  # 50
 NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES = 3
-MODEL_PATH = 'models/weights-improvement-05-1.7419.hdf5'
+MODEL_PATH = 'models/weights-improvement-49-0.0027.hdf5'
 EPOCH_NUMBER = 50  # 50
 BATCH_SIZE = 1  # 64
 TEXT_STARTER = ' ahahahahahah ahahah'  # 'salut mamene, '
@@ -36,14 +36,14 @@ def main(**kwargs):
         kwargs['number_of_character_between_sequences']
     )
 
-    if click.confirm('Do you want to use a pre-trained model?'):
+    if click.confirm('Do you want to use a pre-trained model?', default=True):
         model_path = click.prompt('Path to the pre-trained model', type=str, default=MODEL_PATH)
         model = neural_network.load_pre_trained_model(model_path)
     else:
         number_of_unique_character = len(set(training_data))
         model = neural_network.TextGeneratorModel(kwargs['sequence_length'], number_of_unique_character)
 
-    if click.confirm('Do you want to train your model?'):
+    if click.confirm('Do you want to train your model?', default=False):
         neural_network.train_the_model(
             model,
             x_train_sequences,
@@ -65,12 +65,12 @@ def main(**kwargs):
 
 main()
 
+# TODO: test main click + test main mocké
 # TODO: lien entre sequence size et text starter
-# TODO: problem lecture du model
-# TODO: test main
-# TODO: faire tourner sur gpu https://www.floydhub.com/
+# TODO: problème à la lecture du model
+# TODO: faire tourner sur gpu https://www.floydhub.com/ + evaluation du modèle
 # TODO: TU on NN : https://medium.com/@keeper6928/how-to-unit-test-machine-learning-code-57cf6fd81765
 # TODO: CE continuous evaluation : https://medium.com/@rstojnic/continuous-integration-for-machine-learning-6893aa867002
-# TODO: générer un fichier audio avec google api
+# TODO: générer un fichier audio avec google api ?
 
 # TODO: slides R&D : https://docs.google.com/presentation/d/1YgxDk1NiClvcqnynwvw1Rw9wMFWzhkzvgKCiif5nZRs/edit#slide=id.g3874863166_0_30
