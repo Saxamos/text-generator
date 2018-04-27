@@ -7,12 +7,12 @@ from text_generator.text_sanitizer import text_sanitizer
 
 INPUT_TEXT_PATH = 'data/zweig_joueur_echecs.txt'
 SANITIZED_TEXT_PATH = 'data/training_data.txt'
-SEQUENCE_LENGTH = 14  # 50
+SEQUENCE_LENGTH = 20  # 50
 NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES = 3
 MODEL_PATH = 'models/weights-improvement-05-1.7419.hdf5'
-EPOCH_NUMBER = 5  # 50
-BATCH_SIZE = 64
-TEXT_STARTER = 'salut mamene, '
+EPOCH_NUMBER = 50  # 50
+BATCH_SIZE = 1  # 64
+TEXT_STARTER = ' ahahahahahah ahahah'  # 'salut mamene, '
 PREDICTION_LENGTH = 50
 
 
@@ -60,11 +60,13 @@ def main(**kwargs):
         character_list_in_training_data,
         kwargs['batch_size']
     )
-    click.echo(click.style(prediction, blink=True, bold=True, bg='white', fg='magenta'))
+    click.echo(click.style(prediction, blink=True, bold=True, fg='red'))
 
 
 main()
 
+# TODO: lien entre sequence size et text starter
+# TODO: problem lecture du model
 # TODO: test main
 # TODO: faire tourner sur gpu https://www.floydhub.com/
 # TODO: TU on NN : https://medium.com/@keeper6928/how-to-unit-test-machine-learning-code-57cf6fd81765

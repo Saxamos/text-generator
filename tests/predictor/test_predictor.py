@@ -1,6 +1,7 @@
+import numpy as np
 import pytest
 
-from text_generator.neural_network.neural_network import load_pre_trained_model, TextGeneratorModel
+from text_generator.neural_network.neural_network import load_pre_trained_model, TextGeneratorModel, train_the_model
 from text_generator.predictor.predictor import predict
 
 
@@ -73,14 +74,20 @@ class TestPredict:
 class TestPredictWithNewModel:
     def setup_class(self):
         sequence_length = 3
-        self.character_list_in_train_text = ['s']
+        self.character_list_in_train_text = ['y', 'z']
         self.model = TextGeneratorModel(sequence_length, len(self.character_list_in_train_text))
+        x_train_sequences = np.array([[[1, 0], [0, 1], [0, 1]],
+                                      [[1, 0], [0, 1], [0, 1]],
+                                      [[1, 0], [1, 0], [0, 1]]])
+        y_train_sequences = np.array([[0, 1], [0, 1], [1, 0]])
+        epoch_number = 1
         self.batch_size = 1
+        train_the_model(self.model, x_train_sequences, y_train_sequences, epoch_number, self.batch_size)
         self.prediction_length = 4
 
     def test_return_a_text_prediction(self):
         # Given
-        test_text = 'sss'
+        test_text = 'zzy'
 
         # When
         result = predict(
@@ -92,11 +99,11 @@ class TestPredictWithNewModel:
         )
 
         # Then
-        assert result == 'sssssss'
+        assert result == 'zzyzzzz'
 
     def test_return_another_text_prediction_with_different_starter_and_length(self):
         # Given
-        test_text = 'sss'
+        test_text = 'zyz'
         self.prediction_length = 6
 
         # When
@@ -109,7 +116,7 @@ class TestPredictWithNewModel:
         )
 
         # Then
-        assert result == 'sssssssss'
+        assert result == 'zyzzzzzzz'
 
     def test_returns_error_when_character_in_text_starter_not_in_train_text(self):
         # Given
@@ -124,7 +131,7 @@ class TestPredictWithNewModel:
 
     def test_returns_error_when_length_of_text_starter_is_not_equal_to_the_model_sequence_length(self):
         # Given
-        test_text = 'sssss'
+        test_text = 'zzzzz'
 
         # When
         with pytest.raises(ValueError) as error:
@@ -132,4 +139,4 @@ class TestPredictWithNewModel:
 
         # Then
         assert str(error.value) == (
-            'Error when checking : expected lstm_1_input to have shape (3, 1) but got array with shape (5, 1)')
+            'Error when checking : expected lstm_5_input to have shape (3, 2) but got array with shape (5, 2)')

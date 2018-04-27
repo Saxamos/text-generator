@@ -6,9 +6,6 @@ from keras.models import Sequential, load_model
 class TextGeneratorModel(Sequential):
     def __init__(self, sequence_length, number_of_unique_character):
         super().__init__()
-        # self.sequence_length = sequence_length
-        # self.number_of_unique_character = number_of_unique_character
-
         self.add(LSTM(256, input_shape=(sequence_length, number_of_unique_character), return_sequences=True))
         self.add(Dropout(0.2))
         self.add(LSTM(256))
@@ -16,15 +13,6 @@ class TextGeneratorModel(Sequential):
         self.add(Dense(number_of_unique_character))
         self.add(Activation('softmax'))
         self.compile(loss='categorical_crossentropy', optimizer='adam')
-    #
-    # def build_model(self):
-    #     self.add(LSTM(256, input_shape=(self.sequence_length, self.number_of_unique_character), return_sequences=True))
-    #     self.add(Dropout(0.2))
-    #     self.add(LSTM(256))
-    #     self.add(Dropout(0.2))
-    #     self.add(Dense(self.number_of_unique_character))
-    #     self.add(Activation('softmax'))
-    #     return self.compile(loss='categorical_crossentropy', optimizer='adam')
 
 
 def load_pre_trained_model(model_path):
