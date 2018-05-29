@@ -7,7 +7,7 @@ def predict(model, text_starter, prediction_length, character_list_in_train_text
     first_sequence = text_starter
     prediction = first_sequence
     for i in range(prediction_length):
-        next_char = _predict_single_character(model, text_starter, character_list_in_train_text)
+        next_char = _predict_single_character(model, first_sequence, character_list_in_train_text)
         prediction += next_char
         first_sequence = first_sequence[1:] + next_char
     return prediction
