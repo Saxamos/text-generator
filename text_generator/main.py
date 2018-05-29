@@ -1,18 +1,14 @@
 import click
 
-from text_generator.data_processor import pre_processor
-from text_generator.neural_network import neural_network
-from text_generator.predictor import predictor
-from text_generator.text_sanitizer import text_sanitizer
+from text_generator.legacy_prediction import legacy_prediction
 
 INPUT_TEXT_PATH = 'data/zweig_joueur_echecs.txt'
 SANITIZED_TEXT_PATH = 'data/training_data.txt'
 SEQUENCE_LENGTH = 50
 NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES = 3
-MODEL_PATH = 'models/weights-improvement-{}.hdf5'
-EPOCH_NUMBER = 50
+EPOCH_NUMBER = 10
 BATCH_SIZE = 64
-TEXT_STARTER = 'salut mamene, je ne comprends pas bien ce que tu f'
+TEXT_STARTER = 'salut mamene, je ne comprends pas bien ce que tu d'
 PREDICTION_LENGTH = 20
 
 
@@ -25,46 +21,19 @@ PREDICTION_LENGTH = 20
 @click.option('--batch-size', default=BATCH_SIZE, help='Number of sequence by batch.')
 @click.option('--text-starter', default=TEXT_STARTER, help='Beginning of the sentence to be predicted.')
 @click.option('--prediction-length', default=PREDICTION_LENGTH, help='Length of the desired text to predict.')
+@click.option('--use-pretrained-model', is_flag=True, default=True, help='Should use a pre-trained model')
+@click.option('--train-model', is_flag=True, default=False, help='Should train the model')
+@click.option('--pretrained-model-path', help='path to the pretrain model', prompt='Path to the pre-trained model')
 def main(**kwargs):
-    text_sanitizer.sanitize_input_text(kwargs['input_text_path'], kwargs['sanitized_text_path'])
-    training_data, character_list_in_training_data = text_sanitizer.read_training_data(kwargs['sanitized_text_path'])
-
-    x_train_sequences, y_train_sequences = pre_processor.prepare_training_data(
-        training_data,
-        character_list_in_training_data,
-        kwargs['sequence_length'],
-        kwargs['number_of_character_between_sequences']
-    )
-
-    if click.confirm('Do you want to use a pre-trained model?', default=True):
-        model_number = click.prompt('Path to the pre-trained model', type=str)
-        model = neural_network.load_pre_trained_model(MODEL_PATH.format(model_number))
-    else:
-        number_of_unique_character = len(set(training_data))
-        model = neural_network.generate_model(kwargs['sequence_length'], number_of_unique_character)
-
-    if click.confirm('Do you want to train your model?', default=False):
-        neural_network.train_the_model(
-            model,
-            x_train_sequences,
-            y_train_sequences,
-            kwargs['number_of_epoch'],
-            kwargs['batch_size']
-        )
-
-    prediction = predictor.predict(
-        model,
-        kwargs['text_starter'],
-        kwargs['prediction_length'],
-        character_list_in_training_data
-    )
+    prediction = legacy_prediction(**kwargs)
     click.echo(click.style(prediction, blink=True, bold=True, fg='red'))
 
 
 main()
 
 # TODO: path de click
-# TODO: test main click + test main mocké
+# TODO: IDD
+# TODO: test main (client click)
 # TODO: lien entre sequence size et text starter + plains d'autres règles métiers à implém
 # TODO: problème à la lecture du model
 # TODO: faire un logger
