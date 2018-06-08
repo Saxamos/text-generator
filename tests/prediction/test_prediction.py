@@ -10,9 +10,9 @@ BATCH_SIZE = 64
 TEXT_STARTER = 'salut mamene, je ne comprends pas bien ce que tu f'
 
 
-def test_predict_text____():
+def test_predict_text_with_05_1_5708_model():
     # Given
-    trained_model_path = 'models/256_256_150iter_50seq_punct_0.6732.hdf5'
+    trained_model_path = 'models/weights-improvement-05-1.5708.hdf5'
     text_starter = 'salut mamene, je ne comprends pas bien ce que tu f'
     prediction_length = 20
     expected = legacy_prediction(input_text_path=INPUT_TEXT_PATH, sanitized_text_path=SANITIZED_TEXT_PATH,
@@ -25,6 +25,27 @@ def test_predict_text____():
 
     # When
     result = predict_text(trained_model_path, text_starter, prediction_length)
+
+    # Then
+    assert result == expected
+
+
+def test_predict_text_with_all_models():
+    # Given
+    model_id_array = ['01-1.9578', '02-1.8435', '03-1.7386', '04-1.6562', '05-1.5708']
+    trained_model_path_array = [f'models/weights-improvement-{model_id}.hdf5' for model_id in model_id_array]
+    text_starter = 'salut mamene, je ne comprends pas bien ce que tu f'
+    prediction_length = 20
+    expected = [f'{text_starter}ais de mes partie de',
+                f'{text_starter}artier de me partier',
+                f'{text_starter}ait a contre de cont',
+                f'{text_starter}ite de se pas de se ',
+                f'{text_starter}aire de la partie de']
+
+    # When
+    result = []
+    for trained_model_path in trained_model_path_array:
+        result.append(predict_text(trained_model_path, text_starter, prediction_length))
 
     # Then
     assert result == expected

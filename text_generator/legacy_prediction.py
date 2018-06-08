@@ -3,8 +3,6 @@ from text_generator.neural_network import neural_network
 from text_generator.predictor import predictor
 from text_generator.text_sanitizer import text_sanitizer
 
-MODEL_PATH = 'models/256_256_150iter_50seq_punct_0.6732.hdf5'
-
 
 def legacy_prediction(**kwargs):
     text_sanitizer.sanitize_input_text(kwargs['input_text_path'], kwargs['sanitized_text_path'])
@@ -17,7 +15,7 @@ def legacy_prediction(**kwargs):
     )
     use_pretrained_model = kwargs['use_pretrained_model']
     if use_pretrained_model:
-        model = neural_network.load_pre_trained_model(MODEL_PATH)
+        model = neural_network.load_pre_trained_model(kwargs['trained_model_path'])
     else:
         number_of_unique_character = len(set(training_data))
         model = neural_network.generate_model(kwargs['sequence_length'], number_of_unique_character)
