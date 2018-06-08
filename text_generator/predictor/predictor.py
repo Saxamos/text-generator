@@ -21,5 +21,8 @@ def _predict_single_character(model, text_starter, character_list_in_train_text)
     shape_with_batch = (1,) + one_hot_encoded_character_sequence.shape
     updated_one_hot_encoded_character_sequence = np.reshape(one_hot_encoded_character_sequence, shape_with_batch)
     one_hot_encoded_prediction = model.predict(updated_one_hot_encoded_character_sequence, verbose=0)[0]
-    prediction_index = np.argmax(one_hot_encoded_prediction)
-    return character_list_in_train_text[prediction_index]
+    # TODO: fetch a good distribution and fit model
+    # prediction_index = np.argmax(one_hot_encoded_prediction)
+    prediction_index = np.random.choice(one_hot_encoded_prediction, p=one_hot_encoded_prediction)
+    return character_list_in_train_text[np.where(one_hot_encoded_prediction == prediction_index)[0][0]]
+    # return character_list_in_train_text[prediction_index]

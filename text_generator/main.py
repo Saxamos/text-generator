@@ -10,10 +10,10 @@ SANITIZED_TEXT_PATH = 'data/training_data.txt'
 SEQUENCE_LENGTH = 50
 NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES = 3
 MODEL_PATH = 'models/weights-improvement-{}.hdf5'
-EPOCH_NUMBER = 2
+EPOCH_NUMBER = 5
 BATCH_SIZE = 64
 TEXT_STARTER = 'salut mamene, je ne comprends pas bien ce que tu d'
-PREDICTION_LENGTH = 20
+PREDICTION_LENGTH = 200
 
 
 @click.command()
