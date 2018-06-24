@@ -1,6 +1,0 @@
-click
-numpy
-keras
-pytest
-unidecode
-h5py
