@@ -1,55 +1,27 @@
-from text_generator.text_sanitizer.text_sanitizer import _sanitize, read_training_data
+from text_generator.text_sanitizer.text_sanitizer import sanitize_input_text
 
 
-class TestReadTrainingData:
-    def test_return_training_data_and_the_associated_list_of_characters(self):
+class TestSanitizeInputText:
+    def test_return_sanitized_training_data_and_the_associated_list_of_characters(self):
         # Given
-        sanitized_text_path = 'tests/text_sanitizer/test_training_data.txt'
+        input_text_path = 'tests/text_sanitizer/test_data'
 
         # When
-        training_data, character_list_in_training_data = read_training_data(sanitized_text_path)
+        training_data, character_list_in_training_data = sanitize_input_text(input_text_path)
 
         # Then
-        assert training_data == 'aaaa bb b\n'
-        assert character_list_in_training_data == ['\n', ' ', 'a', 'b']
+        assert training_data == "android propose une approche de la securite base sur la declaration de privileges." \
+                                "\n\nhtml5 permet de gerer le mode hors-ligne lors de la consultation d'un site."
+        assert character_list_in_training_data == ['\n', ' ', "'", '-', '.', '5', 'a', 'b', 'c', 'd', 'e', 'g', 'h',
+                                                   'i', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'v']
 
-    def test_capture_the_printed_informations(self, capsys):
-        # Given
-        sanitized_text_path = 'tests/text_sanitizer/test_training_data.txt'
-
-        # When
-        read_training_data(sanitized_text_path)
-
-        # Then
-        captured = capsys.readouterr()
-        assert captured.out == ("'a' 4\n"
-                                "'b' 3\n"
-                                "' ' 2\n"
-                                "'\\n' 1\n"
-                                "*******************************\n"
-                                "Cardinal of character set : 4\n"
-                                "*******************************\n")
-
-
-# TODO: comment tester "sanitize_input_text" with context
-
-class TestSanitize:
-    def test_reduce_character_cardinal(self):
-        # Given
-        text = 'Aé'
-
-        # When
-        result = _sanitize(text)
-
-        # Then
-        assert result == 'ae'
-
-    def test_remove_semicolon_character(self):
-        # Given
-        text = 'il est toujours nouveau ; sa marche est mecanique ; il est etroitement'
-
-        # When
-        result = _sanitize(text)
-
-        # Then
-        assert result == 'il est toujours nouveau, sa marche est mecanique, il est etroitement'
+    # def test_capture_the_printed_informations(self, capsys):
+    #     # Given
+    #     input_text_path = 'tests/text_sanitizer/test_data'
+    #
+    #     # When
+    #     sanitize_input_text(input_text_path)
+    #
+    #     # Then
+    #     captured = capsys.readouterr()
+    #     assert captured.out == ()

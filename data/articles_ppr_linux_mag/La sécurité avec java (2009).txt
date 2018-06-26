@@ -1,0 +1,180 @@
+﻿La sécurité Java
+Depuis l'origine, Java utilise différentes technologies pour protéger les postes utilisateurs contre du code malveillant. Combinées, elles permettent une réelle sécurité, rarement mise en défaut. Regardons les différentes barrières mises en place dans une JVM pour interdire l'utilisation de code malveillant.
+Par Philippe PRADOS - 2009
+www.prados.fr
+Cet article présente les différentes techniques et approches permettant de faire de Java, l'un des langages les plus sûrs : les opcodes et la JVM, le scellement des packages, certains packages spéciaux, les APIs, la sand box et les gardians, avant d'évoquer quelques vulnérabilités encore présentes.
+Opcode et JVM
+La première couche de sécurité de Java consiste à utiliser une machine virtuelle pour l'exécution d'un code. Cette machine virtuelle a été spécialement conçue pour réaliser une vérification complète du code, avant son exécution. Les Opcodes ont été sélectionnés pour faciliter cette analyse. Ainsi, il n'est pas possible de rédiger une classe spécialement formée pour exploiter une confusion entre un entier et un pointeur, pour déborder d'un tableau, etc.
+Comme le compilateur ne peut être digne de confiance, ces vérifications sont effectuées par la JVM au chargement. Lors de l’installation d'une classe, la JVM effectue de nombreux contrôles sur le code. Ensuite, elle peut assumer que le code est qualifié et générer à la volée, un code assembleur optimisé.
+Elle vérifie :
+* qu'il n'y a pas d'opération entrainant un débordement de pile vers le haut ou le bas ;
+* que toutes les variables locales utilisées et valorisées sont valides ;
+* que les arguments de toutes les instructions de la JVM utilisent des types valides.
+Le processus s'effectue en plusieurs étapes.
+Étape 1 : lorsqu'une classe est chargée par la machine virtuelle, elle vérifie que le format du fichier est correct.
+Étape 2 : L'étape suivante vérifie les contraintes de base du langage. Est-ce qu'une classe final n'a pas de sous-classe et est-ce que les méthodes final ne sont pas surchargée ? Est-ce que chaque classe, autre que Object, possède une super-classe ? Est-ce que les descriptions des métas-données dans le pool de constantes ont bien les bons types ?
+Étape 3 : Cette étape consiste à vérifier la qualité du opcode de chaque méthode de la classe. Cela s'effectue par une analyse du flux de traitement dans chaque méthode. La JVM vérifie qu'a chaque point du programme :
+* la pile des opérandes a toujours la même taille et contient des valeurs de même type ;
+* aucune variable locale n'est accédée avec des types inappropriés ;
+* les méthodes sont invoquées avec les bons types d'arguments ;
+* les attributs sont valorisés seulement avec des valeurs du bon type ;
+* tous les opcodes possèdent les bons type d'arguments pour les données en piles ou les variables locales.
+Étape 4 : Pour des raisons de performances, certaines vérifications devant en principe être exécutées à la phase précédente, sont effectuée lors de la première invocation des méthodes. En effet, certains comportements récursifs ne peuvent être analysé sans le chargement de classes complémentaires.
+La première fois qu'une instruction référençant un type est exécuté, cette dernière :
+* charge la définition du type si ce n'est déjà fait ;
+* vérifie que le type correspond au type référencé ;
+* vérifie que les méthodes ou les attributs référencés existent dans la classe ;
+* vérifie que la classe possède les droits d'y accéder.
+Comme les machines virtuelles savent maintenant compiler à la volée les opcodes en équivalent assembleur, ces vérifications sont effectuées avant une éventuelle compilation. En pratique, le code assembleur généré a parfois souffert de vulnérabilité sur certaines JVM, mais ces situations sont très rares et ne semblent plus d'actualité avec les implémentations actuelles.
+Scellement
+Comme Java est un langage présentant la particularité d'utiliser un éditeur de liens tardif des classes et des fonctions, il n'y a pas de garantie qu'une classe exécutée est exactement celle prévue par l'application lors de la compilation. C'est d'ailleurs un élément important de portabilité, permettant d'utiliser des machines virtuelles plus récentes, sans re-compilation.
+Le chargement s'effectuant par une consultation de différents répertoires ou archives, il est possible de placer une version vérolée d'une classe à un emplacement plus prioritaire, permettant alors de modifier le comportement d'une méthode. Nous avons exploité cela en 2001 dans un article publié par « Le monde Informatique », indiquant comment les applets signées pouvaient être pervertie, sans modifier la signature numérique. Une classe signée ouvre un privilège, puis invoque une classe spoofée, non signée. Cette dernière bénéficie alors des privilèges.
+Pour éviter cela, il est nécessaire de sceller les packages. C'est un paramètre à indiquer dans chaque archive, imposant que toutes les classes d'un package ne peuvent venir que d'une seule est unique archive. Cela s'effectue par un paramètre dans le fichier MANIFEST.MF. Si ce dernier possède le paramètre Sealed: true, tous les packages de l'archive sont protégés. Il est également possible de sceller les packages individuellement. Cela permet d'imposer que toutes les classes d'un même package viennent d'une même archive. Ainsi, l'exploitation de mécanisme de liaison pour modifier une seule classe est rendue inefficace.
+Le seul angle d'attaque est de remplacer toutes les classes d'un package et être chargé avant les classes originales. Ce n'est pas impossible. Si des privilèges étaient accordés aux classes du package original, via une signature numérique de ce dernier, on pourrait remplacer toutes les classes, mais pas les signer. Les nouvelles versions n'ont alors plus accès aux privilèges. Malheureusement, les composants Java déclarent rarement ce paramètre. Dans les fait, il est donc facile de détourner une classe de sa fonction première.
+Packages spéciaux
+Un autre mécanisme permet d'interdire globalement l'ajout ou la consultation de certains packages critiques, les packages java, javax et sun par exemple. Ce mécanisme est mis en place par la valorisation de deux variables d'environnement système de la JVM : package.definition et package.access. La première variable permet d'interdire de définir des classes dans les packages, la seconde permet d'interdir l'accès aux classes de package. Tomcat utilise cela pour protéger les classes du serveur d'application vis-à-vis des classes des composants applicatifs (voir le fichier catalina.properties). Pour utiliser ces classes ou pour y ajouter de nouvelles classes, il faut bénéficier de privilèges spécifiques et demander à les utiliser.
+permission java.lang.RuntimePermission  
+  "accessClassInPackage.org.apache.tomcat.dbcp.dbcp";
+Ainsi, il peut être interdit d'accéder à certaines classes ou d'ajouter des classes dans les packages java ou javax. Sans ces limitations, il est possible d'exploiter des privilèges de type packages entre les classes, et par exemple, modifier le contenu d'une instance String.
+La méthode String.String(int offset, int count, char value[]) est « package private ». C'est à dire qu'elle ne peut être accédé que par des classes du même package. Elle est invoquée par la méthode StringBuffer.toString() pour que l'instance récupère directement le buffer du StringBuffer, sans duplication du contenu. Donc, s'il est possible de publier une classe dans le package java.lang, il est possible d'accéder à cette méthode, et de contrôler le buffer géré par un String.
+char[] mybuf=new char[100];
+String hook=new String(0,100,mybuf); // Ctr package private
+mybuf[0]='A'; // Modification de l'instance immuable 'hook' !
+Si une classe de ces packages est proposée par l'application dans une de ces archives, une exception est générée et l'application interrompue.
+Les API
+Java étant capable de maîtriser le code exécuté, il garantit qu'il est impossible d'invoquer une DLL présente sur le poste. Java a parfois besoin d'y avoir accès, pour les interactions avec le système d'exploitation. Donc, par effet de bord, il est possible d'exploiter des API de Java pour sortir de la JVM et interagir avec l'OS.
+Par exemple, les chaînes de caractères de java sont mémorisées avec un tableau de caractère et une taille. Les API de l'OS utilisent plutôt l'approche C/C++ consistant à utiliser le caractère de fin '\0'. Il est donc possible de combiner les deux approches pour leurrer un code Java. Par exemple, si un code Java ajoute un suffixe à un nom de fichier, afin d'être certain de manipuler que des noms sains, il est possible d'invoquer cette API en utilisant une chaîne de caractères contenant un caractère zéro. Du point de vue de Java, la chaine de caractère sera enrichie d'une extension. Mais lorsque la chaîne sera livré à l'OS, elle sera coupée après le délimiteur, ignorant ainsi l'extension.
+Les droits des systèmes d’exploitations permettent de limiter les accès aux applications. Les serveurs d’applications JavaEE sont lancés par un seul programme, la machine virtuelle java. Ainsi, toutes les applications WEB bénéficient des droits accordés par le système d’exploitation à la JVM lors du lancement. Pour améliorer cela, et proposer des droits limités suivant les différentes applications hébergées par le serveur d'application, il faut utiliser la sécurité java 2, plus riche que ce que propose le système d’exploitation.
+Pour éviter l'utilisation d'API risquée, Java propose une couche de sécurité. Si le mécanisme correspondant est mis en place, chaque API risquée commence par vérifier les privilèges accordés à l'appelant. Si la permission est accordée, l'API est exécutée. Sinon, une exception spécifique est générée.
+Par exemple, il est possible de limiter les accès aux fichiers ou aux répertoires pour certaines parties du code de l'application. Toutes les API d'accès aux fichiers vérifient les droits avant d'invoquer les API de l'OS. C'est ainsi que les applets java ne peuvent manipuler le poste utilisateur ou communiquer avec un réseau autre que celui dont elles sont issues.
+Si certaines API n'exigent pas de droits ou de façons trop lâches il peut exister des failles dans ce mécanisme. Depuis plus de quinze ans que Java existe, la plupart des failles de ce type ont été identifiées.
+Mais, dans certaines situations, des APIs apparemment sans danger peuvent être exploitées. Nous venons de publier une alerte dans ce sens (CVE-2009-0911). Java propose la notion de « services ». C'est une convention permettant de déclarer des implémentations d'interfaces pour les services communs (parseurs XML, persistances, etc.) Pour déclarer un service, il suffit d'avoir un fichier dans le répertoire META-INF/services indiquant la classe d'implémentation. Il est donc facile de proposer un nouveau parseur XML par exemple, s'occupant de modifier les fichiers de paramètres à la volée pour modifier les logs, ajouter des services, détourner des traitements, etc.
+Pour corriger le problème, nous proposons un patch à OpenJDK 6 pour ajouter un nouveau privilège et pour le vérifier dans une vingtaine de méthodes. Ainsi, il est nécessaire d'avoir le privilège correspondant pour ajouter un service.
+Pour vérifier les privilèges d'accès à certaines API, Java associe à chaque classe l'archive l'ayant importée en mémoire et éventuellement la signature numérique utilisée pour signer la classe. Cette association s'effectue par le chargeur de classe, version sécurisée. Ces deux informations seront comparées aux privilèges accordés par la JVM..
+Avoir un privilège accordé à une archive n'implique pas que tous le code de l'archive en bénéficie immédiatement. Il faut en plus, invoquer une API spécifique signalant que le code entre dans une section critique, nécessitant des privilèges. Lors de l'invocation d'une API risquée, le code parcours la pile d'appels pour rechercher une classe ayant le droit d'utiliser l'API, et qui de plus, a demandé à bénéficier du privilège via l'API spécifique.
+Les privilèges sont donc ouverts pour un thread , à partir d'un certain niveau de la pile d'appel. Via l'API JAAS (Java Authentication and Authorization Service), il est également possible d'associer un utilisateur à un thread, pour bénéficier de privilèges accordés aux utilisateurs. Ainsi, certains utilisateurs pourront avoir accès à des APIs, d'autres non.
+Les classes sont chargées à partir d’une ressource. Cela peut être un fichier class, une archive jar ou une ressource récupérée sur le WEB. À chaque classe est associée la ressource initiale d’où elle est extraite et éventuellement des signataires. La classe CodeSource associe la source du chargement de la classe et les signatures.
+Un domaine de protection associe une source de code et un ensemble de privilèges. La classe ProtectionDomain se charge de cette association. Lors du chargement d’une classe, à partir d’un code source donnée, les privilèges sont récupérés dans le fichier java.policy de la JVM et un domaine de protection est créé. Celui-ci est associé à la classe. La méthode Class.getProtectionDomain() offre de consulter ces informations. Il est alors possible de retrouver la source d’une classe et de consulter les privilèges associés.
+Le mécanisme de sécurité de java s’appuie sur ces informations. Un code s’exécute avec certains privilèges. Il peut invoquer des classes venant d’une autre archive ou faisant partie de la JVM. Toutes les méthodes invoquées obtiennent, par héritage d’appel, les privilèges de l’appelant. Un code critique qui désire vérifier que l’appelant possède des droits particuliers doit utiliser la classe AccessController.
+if (System.getSecurityManager() != null)
+  java.security.AccessController.checkPermission(
+    new FilePermission("log.txt","write"));
+Ce code génère une exception si l’appelant ne possède pas le privilège d’écrire sur le fichier log.txt. Pour obtenir ce privilège, il faut demander à la JVM d’exécuter un code avec les droits associés à la classe lors du chargement. Cela s’effectue toujours avec la classe AccessControler. Les méthodes doPrivileged() ouvrent les droits associés à la classe. Cela permet de bénéficier des privilèges pour pouvoir invoquer des API plus sensibles. Deux interfaces sont proposées. La première, PrivilegedAction, exécute un traitement sans propager d’exception, autres que les exceptions non vérifiées. La deuxième, PrivilegedExceptionAction propose un service similaire, mais toutes les exceptions sont propagées. Elles peuvent être capturées par l’appelant, encapsulées dans une exception PrivilegedActionException. Généralement, l’application utilise une classe anonyme pour implémenter ces interfaces.
+// Ici, privilèges hérités de l’appelant
+FileOutputStream  out=(FileOutputStream)AccessController.doPrivileged(
+  new PrivilegedAction()
+  {
+    public Object run()
+    {
+      // Ici, privilèges propres à la classe
+      return new FileOutputStream("log.txt"); // Accès possible
+    }
+  });
+// Ici, à nouveau les privilèges hérités de l’appelant
+Comment associer des privilèges à une classe ? Il faut modifier le fichier java.policy de la JVM ou placer votre code dans un répertoire considéré comme sûr par la JVM. C’est le cas du répertoire $JAVA_HOME/lib/ext. Toutes les classes venant de ce répertoire bénéficient de tous les privilèges. La règle suivante le déclare :
+grant codeBase "file:${java.home}/lib/ext/*" {
+  permission java.security.AllPermission;
+};
+Pour n’ouvrir que certains privilèges, il faut enrichir le fichier java.policy afin de proposer des privilèges différents suivant la source des classes. Vous pouvez également demander l’utilisation d’un fichier de politique de sécurité différente à l’aide du paramètre -Djava.security.policy lors du lancement de la JVM.
+java -Djava.security.manager -Djava.security.policy=<url> Main
+La sécurité est vérifiée si, et seulement si, une instance de SecurityManager est installée dans la JVM.
+System.setSecurityManager(new SecurityManager());
+Les privilèges sont représentés par des classes qui doivent avoir une portée globale à la JVM. Ils sont déclarés dans un fichier .policy, avant le lancement de la JVM. Ainsi, il n'est pas possible de les modifier dans la JVM.
+La syntaxe de ce fichier permet d'accorder des privilèges pour une archive spécifique, un répertoire avec ou sans ces sous-répertoires, une signature numérique ou un utilisateur.
+Pour lancer un Tomcat en activant la sécurité Java, il faut ajouter le paramètre -security.
+$ $CATAINA_HOME/bin/catalina.sh run -security
+Chaque serveur d'applications utilise une syntaxe spécifique pour imposer la sécurité. Certains ne proposent rien. Il est donc nécessaire de modifier le script de lancement pour ajouter la sécurité. C'est le cas de JBoss par exemple. Concrètement, lors du lancement de la JVM, la sécurité est active si la variable d'environnement java.security.manager est présente. La variable java.security.policy indique le fichier de policy à utiliser.
+Les serveurs d'applications ont besoins d'offrir des privilèges minimums aux composants java. C'est pourquoi, en remontant la pile d'appels, le code arrive toujours sur l'invocation de la méthode doPrivileged().
+AccessController.doPrivileged(new PrivilegedAction<Object>()
+{ public final Object run()
+ {
+ // ...
+ }
+}
+Ainsi, chaque composant bénéficie des privilèges décris dans la section grant {} du fichier de politique. Cette section propose des privilèges par défaut. Sans un appel comme celui-ci en amont de la pile, aucun privilège n'est accordé.
+Les droits minimums
+Quels sont les droits minimums nécessaires ? Pour qu’une application fonctionne correctement, il faut au moins avoir le droit de lire des ressources à partir du CodeSource de la classe, l’URL d’où est issu la classe. En effet, lors du chargement d’une classe, celle-ci peut avoir besoins d’autres classes. Un chargeur de classe est alors invoqué. Il s’exécute avec les droits de l’appelant, la classe initiale. Il doit pouvoir charger les autres fichiers .class. Lors de l’installation d’une classe, il faut ajouter un accès au code base. Cela peut être un accès répertoire, un accès à une archive seule, un accès à une machine du réseau,…
+Un code qui bénéficie d’une augmentation de privilège doit être le plus petit possible, et ne doit pas invoquer de code non sûr. Par exemple, si vous implémentez un mécanisme de notification, les évènements ne doivent pas être invoqué dans les sections critiques. Sinon, les gestionnaires d’évènement enregistrés peuvent bénéficier des privilèges hérités. Il ne faut pas retourner des informations critiques dans un code privilégié. Par exemple, si une méthode public utilise ses privilèges pour obtenir le nom de l’utilisateur, il ne faut pas le retourner à l’appelant. Sinon, la protection sur cette information confidentielle tombe. Pour contourner cette limitation, il faut utiliser les GuardedObject décrits plus loin.
+Sand box
+Parfois, certaines parties du code doivent bénéficier de moins de privilèges que le reste. Java ne propose pas d’API pour cela. Il est possible de bénéficier de plus de privilèges, mais pas de moins. Pourquoi est-ce nécessaire ? Parfois, l’application doit intégrer dynamiquement du code ou des traitements qui ne doivent pas forcément bénéficier des mêmes privilèges que l’application. Par exemple, imaginez une application offrant à certains utilisateurs de télécharger sur le serveur des feuilles XSL. Cela produit, par exemple, des morceaux de pages pour un portail. Mais, le moteur XSL utilisé offre des fonctionnalités cachées, accordant l’écriture de fichiers et l’exécution d’un code arbitraire java. Un pirate ayant obtenue l’identification d’un utilisateur ayant le droit d’envoyer un fichier XSL, ou un utilisateur malveillant, peuvent prendre la main sur l’ensemble du serveur par cette fonctionnalité, apparemment sans risque. Par exemple, le filtre XSL suivant exploite les extensions de Xalan pour générer un fichier et l’exécuter.
+<?xml version="1.0"?> 
+<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:java="http://xml.apache.org/xslt/java"
+                xmlns:lxslt="http://xml.apache.org/xslt"
+                xmlns:redirect="org.apache.xalan.xslt.extensions.Redirect"
+                extension-element-prefixes="redirect"
+                version="1.0">
+  <xsl:output method="text"/>
+  <xsl:template match="/">
+  <redirect:open file="run.bat"/>
+    <redirect:write file="run.bat">
+notepad.exe
+  </redirect:write>
+  <redirect:close file="run.bat"/>
+    <xsl:variable name="runtime" select="java:java.lang.Runtime.getRuntime()"/>
+    <xsl:value-of select="java:exec($runtime,'run.bat')"/>
+   </xsl:template>
+</xsl:stylesheet>
+Ce filtre XSL, sans protection particulière, permet de lancer un traitement sur le serveur. Ce type d’attaque produit généralement des pages JSP dans le serveur d’application. Elles possèdent du code java bénéficiant des droits de l’application, et peuvent lire les fichiers de paramétrage avec les mots de passes, décompiler toutes les classes, etc.
+Une autre attaque consiste à récupérer le contenu de fichiers présent sur le serveur, à partir d’un simple fichier XML :
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE hack [
+<!ENTITY include SYSTEM "/etc/passwd">
+]>
+<hack>
+&include;
+</hack>
+Lors de l’analyse du fichier XML, le contenu du fichier /etc/passwd est affiché.
+Pour interdire cela, le moteur XSL ou tout autres composant dont vous n’avez pas la garantie d’innocuité, doit être placé dans un bac à sable, réduisant les privilèges du traitement au minimum. Ainsi, quel que soit le contenu de la feuille XSL, il ne pourra pas porter préjudice au serveur. L’approche du bac à sable est utilisée pour le chargement des applets. Elles ne bénéficient de pratiquement aucun privilège.
+Comment obtenir cela ? Comme nous l’avons vu, les droits sont associés à une classe lors de son chargement. Il n’est donc pas possible de perdre des privilèges. Le seul moyen à notre disposition est d’installer une nouvelle version d’une classe, en associant un ProtectionDomain sans privilège ou avec des privilèges réduits. Cette nouvelle classe va avoir besoin d’autres classes. Elles devront également être associées à un ProtectionDomain sans privilège. Ainsi, elles ne peuvent demander de privilèges supplémentaires. Le privilège d’accès en lecture au code source est le seul à ajouter.
+Il faut alors rédiger un ClassLoader en charge d'installer toutes les classes sensibles, en y associant un ProtectionDomain sans privilège, pour la classe et les classes qu'elle utilise. Comme il faut bien lier les classes sans privilèges avec les classes de l'application, quelques classes ou packages servent de liens entre les deux espaces de noms. Ainsi, certaines API sous contrôles peuvent ouvrir des privilèges si cela est nécessaire, mais pas le code dans le bac à sable.
+Nous proposons un classloader pour cela sur notre site.
+Gardien
+Parfois, il est nécessaire de retourner une instance privilégiée, qui sera utilisée plus tard par l’application. Comment être certains que le code qui emploiera l’instance obtenue à l’aide de privilèges ait le droit de le faire ? Pour résoudre cela, java propose la classe GuardedObject et l’interface Guard. Une instance GuardedObject mémorise un objet et un privilège.
+Imaginez la classe suivante qui propose un service retournant un flux vers le fichier readme.txt :
+public class SampleGuarded
+{
+  public static GuardedObject getGuarded()
+  {
+    return (GuardedObject)AccessController.doPrivileged(
+      new PrivilegedAction()
+    {
+
+
+      public Object run()
+      {
+        FileInputStream f;
+        try
+        {
+          f = new FileInputStream("/readme.txt");
+          FilePermission p = 
+            new FilePermission("/readme.txt", "read");
+          return new GuardedObject(f, p);
+        }
+        catch (FileNotFoundException e)
+        {
+          e.printStackTrace();
+          return null;
+        }
+      }
+    });
+  }
+}
+La méthode getGuarded() demande des privilèges pour accéder au fichier /readme.txt. Cet objet est placé dans une instance GuardedObject, et le privilège nécessaire à la manipulation de l’instance y est associé.
+L’instance GuardedObject retournée est manipulable par une classe sans privilèges. Elle peut être mémorisée dans un conteneur, transférée à d’autres classes, envoyée à une classe privilégiée si nécessaire. Mais, il n’est pas possible à une classe sans privilèges d’obtenir un pointeur vers l’instance stream protégée.
+GuardedObject obj=SampleGuarded.getGuarded();
+obj.getObject(); // Exception !
+Ces API offrent de faire transiter des objets sensibles à travers le bac à sable, sans sacrifier la sécurité. Il faut faire très attentions aux objets récupérés dans les zones critiques. Ils ne doivent pas pouvoir être manipulés sans privilège.
+Parfois, les méthodes sensibles ne sont accessibles que par d’autres classes du même package. Ainsi, il n’est pas nécessaire d’utiliser un GuardedObject. Mais, cela suppose qu’il est impossible d’ajouter une nouvelle classe dans le même package, afin de bénéficier artificiellement des accès. Ce n’est pas garantie ! Pour interdire la création de classe dans un package, il faut que toutes les classes du package soient dans une archive, et que celle-ci soit signée et déclarée scellé.
+Autres vulnérabilité
+Java utilise un mécanisme de ramasse-miette (garbage collector), c'est-à-dire qu'une tâche s'occupe de libérer la mémoire des objets devenus inaccessibles. Ces algorithmes en profitent pour regrouper les objets afin de réunir les zones libres. Il est donc possible qu'une information confidentielle soit dupliquée en mémoire. Il est impossible d'effacer avec certitude une donnée en mémoire. Par exemple, si un mot de passe est présent dans un tableau de caractères, l'écraser avec d'autres valeurs ne garantit pas qu'il ne soit plus présent dans la mémoire de la JVM, dans une zone considérée comme libre. La génération d'un core-dump ou la consultation de la mémoire par un processus malveillant permet de retrouver cette information. Il est donc possible de retrouver une clef privée ou un mot de passe en mémoire avec Java, sans possibilité de contrer cette faiblesse.
+Les archives Java utilisent le format ZIP. Ce dernier est de plus en plus utilisé pour d'autres types de fichiers. Par exemple, les documents OpenOffice sont également des fichiers ZIP. Le format zip utilise un en-tête de fichier qui est placé à la fin de ce dernier. Cela s'explique par le mécanisme de construction du fichier. Le format de fichier GIF utilise un en-tête qui est placé au début du fichier. Certains ont eue la bonne idée de marier ces deux formats, en accolant une image est une archive (GIFAR). Ainsi, une applet java peut utiliser une image ou un document OpenOffice comme base de code. Si un site permet le téléchargement de l'un de ces deux formats sur le site (photo de l'utilisateur par exemple), il est possible de proposer une page avec une applet dont le code est récupéré par l'image, et bénéficier ainsi de tous les privilèges accordés à une applet venant de ce site.
+WebSence a publié un rapport indiquant que six sites légitimes sur dix ont hébergé à un moment ou un autre, un malware sans le savoir.
+Conclusion
+De nouvelles vulnérabilités apparaissent régulièrement, permettant une élévation de privilège, des buffer-overflow, etc. mais elles sont le fait de la machine virtuelle et de ces API, pas des applications écrites en Java. Ces  dernières sont vulnérables aux attaques classiques type XSS, CSRF, SQL injections, etc.
+Java est un langage sûr, si les développeurs acceptent enfin d'utiliser tous les services proposés. Dans la très grande majorité, ce n'est pas le cas, ouvrant à la porte à des attaques de type « porte dérobée » comme présenté dans l'article « Macaron ».
+
+
+Références :
+* http://macaron.googlecode.com pour des outils aidant à sécuriser le code java (scellement automatique, audit, gestions du fichier de privilège de la JVM);
+* http://www.prados.fr pour d'autres outils dont un classeloader sandbox

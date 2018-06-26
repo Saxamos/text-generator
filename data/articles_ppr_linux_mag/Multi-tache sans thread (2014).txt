@@ -1,0 +1,515 @@
+﻿Multi-tâche sans threads
+  
+
+Le multi-tâche proposé par les OS n'est pas toujours optimale. Il existe des astuces permettant d'offrir les mêmes services, sans threads à manipuler par le développeur. Les langages de développement évoluent pour proposer des solutions nouvelles. Parcourons ces différentes approches.
+Par Philippe PRADOS - 2014
+www.prados.fr
+Nous avons déjà évoqué que l'ajout de threads à une application n'est pas optimum.
+Pour bien comprendre, nous différencions les soft-threads (qui sont une simulation d’un multi-tâche sur le même cœur) des hard-threads (qui sont des traitements s’exécutant sur des cœurs différents).
+Le scheduler laisse 10ms à chaque thread par exemple. Après ce délai, l'horloge déclenche une interruption hardware. Le processeur est interrompu pour exécuter un traitement de basculement de contexte (Context Switch). Ce traitement commence par mémoriser tous les registres dans la pile de l'application. Avec quelques optimisations, il est capable de savoir si le processeur arithmétique a été nécessaire, pour sauver ou non le contexte associé. Cela permet d’accélérer les traitements. Puis, le scheduleur sélectionne un autre soft-thread pour suivre la procédure inverse : restitution de la valeur de tous les registres. Enfin, le traitement du nouveau soft-thread est lancé. Tous cela prend du temps.
+Si un thread à besoin d'une I/O, le contexte est basculé immédiatement, sans attendre le tick horloge. Lorsque l'I/O est résolue (le secteur est sauvegardé sur disque, le paquet est maintenant sur le réseau, etc.), le thread associé est alors replacé dans la liste circulaire des traitements en attente. Il faut attendre un des prochains tick horloge pour reprendre la main.
+Depuis de nombreuses années, tout traitement effectué en parallèle d’autres traitements mérite un thread dédié. Nous pensons que ce paradigme arrive à essoufflement. En effet, cela part de l'hypothèse que les threads passent leurs temps à attendre, et que c'est l'occasion de donner la main à un autre thread.
+En fait, il y a plusieurs situations possibles :
+* deux soft-threads consomment de la CPU en même temps. Le scheduleur interrompt périodiquement les traitements pour basculer vers le thread suivant. Il y a beaucoup de context switch.
+* Un soft-thread est en attente d'IO pendant qu'un autre veut effectuer un traitement. C'est le cas idéal.
+* Les soft-threads sont tous en attente d'IO. Rien ne se passe. Sur les serveurs d'applications, il n'est pas rare de n'avoir que 20 % de CPU utilisé. C'est le signe que tous les threads attendent.
+Pour corriger cela, il est possible d'augmenter le nombre de thread. Mais dans ce cas, on augmente d'autant la probabilité d'avoir plusieurs threads devant consommer de la CPU en même temps.
+Il est clair que ce n'est pas idéal. La meilleure approche pour consommer la CPU au maximum consiste à fonctionner en asynchrone, sans interruption par le scheduler. Pour cela, il ne faut pas utiliser plus de thread que de core CPU. Cela correspond a n'avoir que des hards-threads et non des soft-threads.
+
+
+Depuis quelque temps, les langages de développement proposent des syntaxes et des librairies permettant de s'affranchir des soft-threads.
+Il existe cinq approches permettant de faciliter la rédaction de programmes réactifs :
+* Générateur
+* Pattern Continuation
+* Co-routine
+* Pipelines / compositions
+* Await / async
+Generator
+Un générateur est une routine spéciale permettant de gérer l’itération d’une boucle. La routine produit des valeurs à chaque étape et mémorise le contexte de la boucle pour pouvoir la reprendre plus tard.
+
+
+Voici un exemple de générateur en Python :
+
+
+# Filtre les chaines débutant avec ##
+def filter2sharps(iterator):
+  for l in iterator:
+    if l.startswith("##"):
+      yield l
+Ce générateur parcourt un itérateur et n’émet une valeur que si elle commence par un double dièse. L’instruction yield (produire en français) est équivalente à un return, à la différence près qu’elle permet de mémoriser l’état de la boucle.
+
+
+Un usage de ce générateur peut être celui-ci :
+# Utilise le filtre sur un fichier
+source= file( ... )
+for line in filter2sharps( source.readlines() ):
+  print line
+source.close()
+Dans cet exemple, la boucle parcourt un fichier et affiche uniquement les lignes compatibles avec le générateur qui joue le rôle de filtre. La boucle du générateur est mise « en pause » après chaque invocation de filter2sharps, lors du yield.
+
+
+Le compilateur du langage effectue une transformation du code du générateur, comme nous allons le voir. Par exemple, le générateur C# suivant est compilé comme ci-dessous.
+
+
+using System;
+using System.Collections;
+class Test {
+  // Une fonction
+  static IEnumerator GetCounter() {
+    for (int c = 0; c < 10; c++) {
+      yield return c;
+    }
+  }
+}
+Le code produit par le compilateur est proche de ce code :
+// Une classe
+private class GetCounter : IEnumerator
+{
+  private int _state = 0;
+  public int _current;
+  private int c = 0;
+  public bool MoveNext() {
+    switch (_state) {
+      case 0: // Dans la boucle
+        if (c < 10) {
+          _current = c;
+          c++;
+          return true;
+        }
+        _state = -1;
+        break;
+    }
+    return false;
+  }
+}
+
+
+static IEnumerator GetCounter() {
+    return new GetCounter();
+}
+On retrouve tous les éléments classiques d’une boucle : l’initialisation, la comparaison, l’incrémentation. Mais le code est transformé en automate à états et en objet pour mémoriser le contexte. L’appelant peut maintenir l’itérateur en vie, ce qui maintient le contexte de la boucle.
+
+
+La transformation d’un générateur en Python est similaire.
+# a generator that yields items
+# instead of returning a list
+def firstn(n):
+  num = 0
+  while num &lt; n:
+    yield num
+    num += 1
+ 
+sum_of_first_n = sum(firstn(1000000))
+Est généré ainsi :
+class firstn(object):
+  def __init__(self, n):
+    self.n = n
+    self.num, self.nums = 0, []
+  def __iter__(self):
+    return self
+  # Python 3 compatibility
+  def __next__(self):
+    return self.next()
+  def next(self):
+    if self.num &lt; self.n:
+      cur, self.num = self.num, self.num+1
+      return cur
+    else:
+      raise StopIteration()
+Javascript 1.7 propose maintenant des générateurs. Pour cela, les functions doivent être suffixées d’une étoile.
+// Javascript
+// Generateur infini
+function* fibonacci() {
+  let [prev, curr] = [0, 1];
+  for (;;) {
+    [prev, curr] = [curr, prev + curr];
+    yield curr;
+  }
+}
+for (n of fibonacci()) {
+  // truncate the sequence at 1000
+  if (n &lt; 1000) break;
+  print(n);
+}
+Un générateur Javascript est également utilisé par des frameworks pour proposer des co-routines.
+Il est assez facile d'utiliser un générateur pour construire un scheduleur maison, qui n'est pas basé sur un basculement après un délai fixé, mais dès l'utilisation d'une IO asynchrone. Lorsque le résultat de l'IO est obtenu de l'OS, le générateur correspondant est ajouté au scheduler pour être exécuté dès que possible. Avec cette approche, nous avons un scheduler collaboratif et non préemptif.
+Nous proposons un exemple en .Net ici : https://bitbucket.org/farcellier/copyfileasync
+Continuation
+La deuxième approche pour gérer des traitements en parallèle sans thread exploite le pattern « continuation[1] ».
+Le pattern continuation est fondé sur le principe suivant : donner une call-back avec le traitement à  invoquer pour continuer après un traitement long. L’idée est de découper un flow de traitement linéaire en blocs de code. Chaque bloc de code est donné en paramètre aux fonctions invoquées. Chaque fonction respectant ce pattern n’effectue pas de return, mais invoque la callback avec le résultat du traitement.
+Techniquement, cela se découpe en plusieurs phases :
+* isoler la suite de l’invocation d’une méthode dans une closure
+* la donner à la méthode appelée
+* la méthode appelée se charge d’invoquer la continuité (la suite du traitement)
+Pour être plus clair, prenons un fragment de code avec deux méthodes. f() invoque g() mais g() prend du temps. Après avoir invoqué g(), f() souhaite afficher le résultat de g(). Nous allons faire évoluer le code petit à petit.
+
+
+// Scala
+def g() = {
+  val rc=… // Long traitement
+  rc  // Mon return
+}
+def f() = {
+  val rc=g()
+  // La suite
+  println("hello " + rc)
+}
+Il y a trois blocs de code à considérer :
+* La fonction g()
+* Le code de f() jusqu’à l’appel de g()
+* Le code de f() après l’appel de g()
+Pour respecter le modèle « continuation », nous allons encapsuler le code après l’invocation de g() dans une fonction, la passer lors de l’invocation de g() dans la variable k (c’est la convention pour ce pattern). g() se charge de l’invoquer à la place du return.
+// Scala
+def g(k: String => Unit) = {
+  val rc=… // Long traitement
+  k(rc) // A la place de return rc
+}
+def f() = {
+  g(continueF)
+  def continueF(rc:String) = {
+    // La suite
+    println("hello " + rc)
+  }
+}
+Avec une syntaxe utilisant les closures, cela donne :
+def g(k: String => Unit) = {
+  val rc=… // Long traitement
+  k(rc) // A la place de return rc
+}
+def f() = {
+  g(
+    { (rc:String) =>
+      println("hello " + rc)
+    }
+  )
+}
+Il existe des extensions des langages permettant de mettre en place ce pattern plus simplement. Par exemple, Scala propose une transformation automatique d’un style direct en un Continuation-Passing-Style[2] (CPS) avec le paramètre -P:continuations:enable[3].
+Cette extension permet d’écrire un code plus simple. L’exemple suivant invoque deux fois la méthode g(). On retrouve tous les éléments.
+def g():String @suspendable = {
+  shift {
+    (k : String => Unit) => {
+      val rc=…
+      k(rc) // A la place de return rc
+    }
+  }
+}
+def f():Unit = {
+  reset {
+    val rc=g()
+    println("hello " + rc)
+    // Profitons-en pour rajouter un appel à g()...
+    println("bye " + g() )
+  }
+}
+La fonction f() illustre la puissance de ce pattern : le développeur conserve une écriture linéaire du code, c’est le compilateur qui se charge de la tuyauterie.
+Le bloc de code qui sera découpé en tranches est identifié par le mot-clef reset. À l’intérieur de ce code, tout ce qui suit l’invocation d’une fonction @suspendable est encapsulé dans une closure et injecté dans la méthode sous le paramètre k. Dans l’exemple suivant, nous avons un bloc avec le premier println() et un deuxième bloc avec le deuxième, car il invoque également la fonction g().
+
+
+La méthode g() utilise shift pour encadrer le code ayant pour vocation à continuer. Le paramètre k permet alors de recevoir le bloc de continuation dans toutes les méthodes @suspendable.
+
+
+Pour le moment, ce pattern n’est pas très clair. A quoi cela sert ? Les choses deviennent plus sympathiques si l’on imagine que g() ne va pas invoquer immédiatement k mais le garder pour plus tard.
+var pourplustard: (String) => Unit
+
+
+def g():String @suspendable = {
+  shift {
+    (k : String => Unit) => {
+      val rc=…
+      // Ici on n'invoque pas k()
+      pourplustard=k
+    }
+  }
+}
+Il est alors possible d’invoquer une API asynchrone proposé par l’OS, et de reprendre le traitement pourplustard à la réception de l’événement correspondant de l’OS.
+Il est également possible de l’invoquer deux fois à la suite, avec des paramètres différents :
+def continueAgain()
+{
+  pourplustard("abc")
+  pourplustard("def")
+}
+Cette transformation du code est pratique, car cela correspond à un enchaînement de callbacks produit par le compilateur.
+Pour la programmation réactive, c’est une approche qui permet d’invoquer des appels @suspendable comme s’ils étaient bloquants dans la syntaxe. C’est le plug-in de Scala qui se charge de la transformation du code.
+Comme dans la continuation, il est trivial de rédiger un scheduler qui va entrelacer les continuations, cela permet de créer un pseudo-multitâches sans avoir à créer de nouveau thread.
+
+
+Il y a quand même quelques inconvénients. Il n’est pas possible d’invoquer une continuation dans une boucle. Cela génère une récursivité infinie.
+for (i <- 1 to 100) {
+ println("Hello "+g()) // Impossible !
+}
+La pile d’appel est modifiée. Elle possède du code difficile à interpréter. C’est le cas de tous les générateurs de codes (programmation par aspect, injections par les classloaders, etc.)
+Les exceptions sont conçues pour un modèle de développement linéaire, elles doivent désormais être traitées par une approche différente.
+Coroutine
+Le terme coroutine[4] a été inventé, en 1963 par Conway et Melvin. Cette technologie a été beaucoup utilisée sous MSDOS (1984) car l’OS n’était pas ré-entrant. Pour les mêmes raisons, ce modèle a perduré sur les premières versions de Windows jusqu’à la version 3.0 (1990). Il a fallu attendre Windows 3.1 (1992) pour avoir de vrais soft-threads dans l’écosystème Microsoft.
+Une coroutine est un thread léger collaboratif. C’est-à-dire que la transition vers une autre coroutine s’effectue à sa demande.
+Le modèle de thread actuel est basé sur un scheduleur pré-emptif. Les tics horloges synchronisent les changements de contextes.
+  
+
+Un scheduleur collaboratif applique un autre modèle.
+  
+
+Une fonction yield() permet d'indiquer quand donner la main à une autre coroutine. Entre temps, le code est certain de ne pas être interrompu.
+L’instruction ou la fonction yield() est vue par le programme comme une fonction vide, sans effet de bord. Mais dans les faits, le flux de traitement est dérouté vers une autre coroutine. Plus tard, le traitement peut revenir pour reprendre le cours de la coroutine après le yield().
+
+
+Cela présente l’avantage de ne plus avoir d’accès concurrent à la mémoire. Chaque traitement d’une Coroutine est certain d’être le seul à s’exécuter.
+Il existe deux types de coroutine : les symétriques donnant la main à la prochaine coroutine et les asymétrique permettant de spécifier le prochain bloc de code à exécuter (Yieldto()). Attention, il peut y avoir affinité entre les coroutines et les soft/hard-threads pouvant les exécuter.
+Les coroutines permettent un basculement du flux de traitement très rapide, car le kernel n’intervient pas, mais présente le risque qu’un traitement monopolise le flux de la CPU sans jamais invoquer la méthode yield(). Par contre, si les développeurs respectent ce modèle, la consommation CPU est optimale. De plus, il n’y a pas de risque d’accès concurrents si un seul hard-threads est utilisé (choix de node.js).
+Avec le langage C, les coroutines sont généralement implémentées à l’aide des instructions setjmp[5] et longjmp. Ces instructions permettent de mémoriser un point précis dans la pile d’appel et d’y revenir. Cela permet de couper tous un empilement d’appel en cas d’erreur. C’est le même modèle que pour les exceptions. Pour schématiser, ces instructions permettent de sauver la valeur du pointeur de pile.
+  
+
+Il n’en faut pas plus pour créer des coroutines. Il suffit de créer des tampons pour de nouvelles pile, de manipuler l’objet généré par un setjmp pour basculer d’une pile à une autre via un changement du pointeur de pile dans la structure jmp_buf.
+  
+
+yield() permet alors de sauver tous les registres dans la pile, de changer le pointeur de pile et de restituer les valeurs de tous les registres pour continuer avec la prochaine coroutine.
+
+
+En java, il existe la librairie Javaflow[6], proposée par la fondation Apache. Il s’agit d’un classloader qui va injecter du code dans toutes les classes. Ce code va maintenir une pile parallèle lors des appels, et permettre de basculer d’une pile à une autre. Tout est porté par une seule instruction de la JVM, instruction qu’un code java ne peut jamais proposer : this = …
+Techniquement, pour modifier la valeur de this vers une autre instance d’une coroutine, il faut exécuter l’opcode astore_0.
+
+
+Voici le code de démarrage d’une coroutine et sa mise en pause.
+// Java
+Continuation.startWith(new MyRunnable());
+Continuation.suspend();
+Pour pouvoir proposer des coroutines sans modifier la JVM, la librairie effectue des transformations importantes dans le code de toutes les méthodes.
+Par exemple, le code suivant va être transformé.
+public final class Simple implements Runnable {
+  public int g = -1;
+  public int l = -1;
+
+
+  public void run() {
+    int local = -1;
+    ++g; l=++local;
+    Continuation.suspend(); // equivalent du Yield
+    ++g; l=++local;
+    Continuation.suspend();
+    ++g; l=++local;
+    Continuation.suspend();
+    ++g; l=++local;
+  }
+}
+Le code est découpé en blocs délimités par l’invocation de méthodes. La méthode suspend() est traitée de façon particulière. Après son invocation, il y a sauvegarde de l’instance courante, sauvegarde de l’état des variables locales à la méthode, sauvegarde du numéro de bloc puis exécution d’un return. Puis, au début de la méthode, il y a injection d’un switch pour sélectionner le bon numéro de bloc à exécuter pour reprendre le traitement de la méthode.
+Le début de la méthode run() ressemble à ceci :
+StackRecorder sr=StackRecorder.get()
+  if (sr==null || sr.isRestoring)
+    goto block_0
+  switch (sr.popInt()) { // Num bloc
+    case 0 :
+      local=sr.popInt()           // reinit les variables locales
+      this=(Simple)sr.popObject() // reinit this. Changement de Coroutine
+      goto save_block_0
+    case 1 :
+      local=sr.popInt()
+      this=(Simple)sr.popObject()
+      goto save_block_1
+    case 2 :
+      local.sr.popInt()
+      this=(Simple)sr.popObject()
+      goto save_block_2
+    …
+}
+Puis les blocs sont proposés :
+block_0:
+  local = -1;
+  ++g; l=++local;
+  save_block_0:
+  Continuation.suspend();
+  // Sauvegarde ?
+  if (sr==null || !sr.isCapturing)
+    goto block_1
+  sr.pushReference(this)
+  sr.pushObject(this)
+  sr.pushInt(local)
+  sr.pushInt(0) // Numéro du bloc
+  return
+block_1:
+  ++g; l=++local;
+  save_block_1:
+  Continuation.suspend();
+  if (sr==null || !sr.isCapturing)
+    goto block_2
+  …
+Avant chaque bloc, il y a une vérification pour s’assurer qu’une demande de suspension n’est pas demandée. Si le traitement peut continuer, un goto est appliqué vers le bloc suivant. Sinon, le contexte est mémorisé dans le StackRecorder et un return est appliqué. Cela interrompt la méthode run(). La reprise s’effectuera en invoquant a nouveau run() sur l’instance.
+L’impact n’est pas nul sur les performances. Il faut en effet maintenir une pile parallèle et ajouter de nombreux tests dans le code.
+Il est plus efficace d’intervenir directement sur la JVM pour proposer ce concept plus intimement. C’est ce que propose le projet « Coroutine for Java[7] ». Un JSR[8] a été ouvert avec une implémentation de référence. L’idée est de proposer une pile spécifique par coroutine dans la mémoire de l’OS (non exécutable). Un switch rapide entre coroutines est possible, en modifiant quelques registres. Techniquement, ce modèle s’approche de l’implémentation C.
+La mémoire réservée aux coroutines est variable suivant les OS et partagée entre les coroutines : 32 Kb (Linux), 64 Kb (Windows) ou 10 Kb (Solaris). En 32 bit, il est possible d’allouer 25 000 piles pour les coroutines. En 64 bit, l’adressage permet d’avoir beaucoup plus de coroutines. Dans les faits, les coroutines maintiennent 1 ou 2 Ko en RAM pour maintenir leur état. Chaque thread java maintient une liste de coroutines et de piles pour les coroutines. Le ramasse miette intègre ces évolutions.
+
+
+Un exemple d’utilisation :
+Coroutine c=new Coroutine(new Runnable() {
+  for (int i=0;i&lt;10;++i) {
+    System.out.println("i=" +i);
+    Coroutine.yield();
+  }
+});
+c.yield()
+Une instance Coroutine est très proche d’une instance Thread.
+Cette implémentation légère est très pertinente, mais demande une modification de la JVM.
+
+
+On retrouve des implémentations pour d’autres langages, souvent appelés Fiber. C’est le cas de Javascript, Python, Ruby, Go, etc. La JVM est le parent pauvre. On retrouve également le terme « green thread ».
+
+
+Dans le cadre d’une utilisation dans une architecture réactive, l’idée est d’exposer des API apparemment bloquantes, mais qui en interne, invoque les API asynchrones de l’OS juste avant un Yield(). Lors de la réception de l’acquittement par l’OS, un Yield() est à nouveau invoqué.
+Pipeline/composition
+Nous continuons notre exploration avec l’approche que l’on peut appeler pipeline ou composition.
+Cette approche est une exploitation astucieuse du modèle de programmation fonctionnel. Avant de commencer, un rappel sur ce modèle de programmation qui se banalise.
+La majorité des langages utilisés pour le moment sont des langages impératifs. C’est-à-dire que les instructions décrivent des actions à exécuter immédiatement, entraînant des effets de bord sur les valeurs des variables. Les traitements suivants exploitent alors les nouvelles valeurs pour effectuer de nouvelles transformations et ainsi de suite. L’exécution d’un programme est une succession de modifications de variables.
+Ce modèle est assez éloigné du modèle mathématique. En effet, l’égalité en mathématiques est toujours vraie, à tout moment. Dans une démonstration mathématique, toutes les lignes sont vraies simultanément, indépendamment de leur ordre d’apparition. Pour que cela soit toujours vrai, il ne doit jamais y avoir d’effet de bord. Toutes les variables doivent être immuables.
+On retrouve cette notion dans la différence entre l’opérateur = et l’opérateur ==.
+Les langages fonctionnels proposent d’utiliser des fonctions mathématiques pour transformer les données. Comme il n’y a pas d’effet de bord, les mêmes entrées donneront toujours le même résultat. Garder le résultat dans une constante, appliquer le traitement en paresseux ou invoquer la fonction à nouveau ne change rien au programme, si ce n’est ses performances.
+Concernant les conteneurs, des fonctions de première classe permettent d’appliquer des transformations sur l’ensemble des données pour produire de nouveaux conteneurs et ainsi de suite. Il est alors facile d’enchaîner les transformations pour filtrer, transformer ou synthétiser les données d’un conteneur.
+Par exemple, la fonction map() permet d’appliquer un traitement à chaque membre d’un conteneur pour alimenter un nouveau conteneur. flatMap() est un dérivé permettant de produire une map d’un seul niveau à partir d’un arbre de map. Une map de map devient une map plate.
+
+
+Cela étant posé, nous pouvons introduire l’approche de gestion des hard-threads avec ce modèle. L’idée est d’appliquer les mêmes fonctions de première classe, mais sur des Future. Ainsi, les transformations s’effectuent en parallèle sur des cœurs différents, au fur et à mesure que des données sont disponibles.
+Voici un exemple en Scala
+// Scala
+val rateQuote = future {
+  conn.getCurrentValue(USD)
+}
+val purchase: Future[Int] =
+  rateQuote map {
+    quote => conn.buy(amount, quote)
+  } recover {
+    case QuoteChangedException() => 0
+  }
+Un équivalent en Javascript
+rateQuote().then(function (quotes) {
+  return Q.all(quotes.map(function (quote) {
+      return buy(amount, quote);
+    }))
+    }).then(function(purchases) {
+      // all purchases completed
+    }, function (error) {
+    // got an error
+  })
+Et un autre en Java8 (qui est réactif)
+// Java8
+CompletableFuture f1 = //...
+CompletableFuture f2 =
+  f1.thenApply(Integer::parseInt)
+    .thenApply(r -> r * r * Math.PI);
+CompletableFuture docFuture = //...
+CompletableFuture f =
+  docFuture.thenApply(this::calculateRelevance);
+CompletableFuture relevanceFuture =
+  docFuture.thenCompose(this::calculateRelevance);
+La méthode thenApply() est équivalente à la méthode map() en Scala et thenCompose() est l’équivalente de la méthode flatMap() de Scala. Des variantes permettent de lancer plusieurs Future et de les attendre tous ou seulement l’un d’entre eux.
+Chaque invocation d’une méthode de première classe est réellement déclenchée lorsque le Future est résolu.
+La distribution des traitements n’est pas sous le contrôle du développeur. Un pool de hard-threads est utilisé pour exploiter au mieux le parallélisme disponible par la plate-forme, sans pour autant utiliser des soft-threads.
+Cette approche permet d’exploiter des traitements parallèles sans effet de bord. Bien entendu, il ne faut pas qu’une transformation soit bloquante, sinon le hard-thread associé est bloqué et les autres traitements ne peuvent être exécutés. Dans un article précédant, nous présentons l'outil « reactive-audit » capable de détecter ces situations.
+Si par malheur, un traitement bloquant doit avoir lieu lors d’une transformation, il est possible de le signaler au pool de hard-threads (ForkJoinThreadPool). En Scala, cela s’effectue simplement.
+blocking {
+  blockingCall()
+}
+Cela signale au pool de thread que l’un d’entre eux entre dans une zone pouvant être bloquante. Le pool accepte alors de créer un soft-thread complémentaire le temps de sortir de ce bloc. Le soft-thread en excès sera détruit dès que possible.
+En Java classique, il faut utiliser l’interface ManagedBlocker.
+La proposition Promise[9] de Javascript permettra de faire la même chose en s’appuyant sur des call-backs.
+// javascript
+Parse.User.logIn("user", "pass")
+  .then(function(user) {
+    return query.find()
+  })
+  .then(function(results) {
+    return results[0].save(
+      { key: value })
+    })
+  .then(function(result) {
+    // the object was saved.
+  });
+Ce modèle de développement, à l’aide d’un pool unique de hard-threads, partagé par tout le programme, est une approche de développement qui se généralise. Scala le propose depuis un moment, Java8 ou .NET le proposent également.
+Cette approche peut être complétée par des transformations appliquées sur les containers. Avec un modèle de donnée immuable, il est possible de filtrer, de synthétiser ou de transformer un container par morceau, en parallèle. C’est l’objectif des nouvelles API de Java8 comme parallelStream().
+double average = roster
+    .parallelStream()
+    .filter(p -> p.getGender() == Person.Sex.MALE)
+    .mapToInt(Person::getAge)
+    .average()
+    .getAsDouble();
+Pour cela, il faut que les traitements appliqués ne soit pas impératifs (exécuté immédiatement), mais paresseux (juste déclaré). Par exemple, dans l’exemple précédant, filter() ou mapToInt() décrivent des traitements à appliquer en parallèle sur le stream, après l’avoir découpé en tranche et distribué sur différents threads du pool de threads. Chaque thread effectue une partie de la transformation pour permettre à average() de synthétiser les résultats partiels. Un map-reduce implicite.
+
+
+Le développeur ne s’occupe plus de la gestion des threads. Il décrit les transformations à appliquer. C’est le framework qui se charge de distribuer au mieux les traitements. Cette distribution est différente suivant les capacités des nœuds, suivant le nombre de cœurs disponibles.
+Cette approche ne fonctionne qu’avec des données immuables, garantissant qu’une donnée ne sera pas modifiée par plusieurs threads. Cela explique la vague de l’approche fonctionnelle dans les différents langages de développements : permettre une utilisation simple du multitâche.
+Ce modèle peut être étendu pour être appliqué sur plusieurs nœuds d’un cluster. C’est l’approche que propose le framework Apache Spark[10]. Mis à part quelques initialisations, les traitements sont décrits par une suite de transformation sur les conteneurs. Puis les descriptions sont distribuées sur les nœuds du cluster pour être exécuté en parallèle sur de gros volume de donnée. Tous cela s’effectue essentiellement en mémoire.
+val file = spark.textFile("hdfs://...")
+val counts = file.flatMap(line => line.split(" "))
+                 .map(word => (word, 1))
+                 .reduceByKey(_ + _)
+counts.saveAsTextFile("hdfs://...")
+L’approche « pipeline » est un enchaînement de modifications asynchrones orientées « programmation fonctionnelle ».
+Async/Await
+Après avoir étudié quatre approches permettant de faire du multitâche sans threads, nous allons voir la dernière, probablement la plus sympathique pour le développeur. C’est une évolution syntaxique des langages permettant de porter le principe d’un pool de hard-threads unique à tout un programme, et donc de porter dans la syntaxe de quoi programmer facilement avec le modèle réactif.
+Il s’agit de proposer deux nouvelles instructions : async et await. Ces mots-clefs ont été popularisés par Microsoft dans C# 5.0 ou F#. Depuis, une macro pour Scala permet de proposer une syntaxe équivalente. Java n’est pas encore équipé.
+L’idée est de découper le code en tranches retournant des Future[T] en Scala, des CompletableFuture<T> en Java8, des Task<T> en .Net, etc. Le code découpé doit lui-même retourner un future.
+async permet d’indiquer une portion de code devant être découpée. await indique les frontières de la découpe.
+
+
+Voici un exemple en C# 5.0
+// .NET
+async Task WebAsync() {
+  HttpClient client = new HttpClient();
+  Task getStringTask = client.GetStringAsync("http://go.gl");
+  DoIndependentWork();
+  string urlContents = await getStringTask;
+  return urlContents.Length;
+}
+Et un autre en Scala
+// Scala
+val future = async {
+  val f1 = async {
+    ...;
+    true
+  }
+  val f2 = async {
+    ...;
+    42
+  }
+  return
+    await(f1) + await(f2))
+}
+C’est le compilateur du langage qui va transformer ce code linéaire en un automate à état. Chaque état correspond à un bloc de code. Chaque bloc est automatiquement enregistré dans les callbacks des futures, pour pouvoir reprendre les traitements au fur et à mesure.
+Dans l’exemple Scala, il faut voir chaque bloc async comme une closure retournant un Future[]. L’instruction await est un enregistrement du bloc de code dans une callback onComplete. La ligne return est donc convertie par le compilateur en un Future[] qui sera valorisé lorsque f1 et f2 seront valorisés.
+Finalement ce code est une façon plus élégante d’écrire un enchaînement de callback de onComplete.
+Là où la magie opère, c’est que les Future<>, les Task<> ou les CompletableFuture<> peuvent être alimentés par des événements.
+La base de données vient de publier le premier enregistrement de la requête ? Mon moteur d’événement informe le programme, ce qui alimente la valeur d’un future. Cela débloque un traitement await. Un hard-thread disponible est alors utilisé pour traiter l’événement.
+Il faut bien comprendre dans cette approche que chaque bloc de code peut être exécuté sur un hard-thread différent. Il ne faut pas utiliser de variables de threads[11] avec ce modèle (pour les transactions ou l’authentification par exemple). Les piles d’appels des exceptions sont également étranges.
+Avec cette approche, il est facile de rédiger un code linéaire classique, tout en fonctionnant sur un mode réactif. Attention, pour en bénéficier pleinement, il ne faut utiliser que des API non-bloquantes. Les frameworks alimentent le CompletableFuture<> lorsque l’OS dispose des données.
+Pour invoquer des API bloquantes il faut utiliser soit un autre pool de thread dédié (comme dans le backgroud pool[12] de Vert.X) ou augmenter la taille du pool global (c’est pas bien, car il n’est pas fait pour cela).
+Dans .NET 5, Microsoft s’est chargé de proposer de nouvelles API asynchrones pour les fichiers, le réseau ou le calcul d’image. Tout ce qui prend du temps et endort normalement le thread courant.
+Java8, avec le CompletableFuture<> est sur la bonne voie pour pouvoir généraliser ce modèle.
+Comme les futures utilisent un pool de hard-threads unique au programme, chaque segment de code peut s’exécuter réellement en parallèle au mieux de la plate-forme. L’augmentation du nombre de cœurs entraîne réellement une amélioration des performances, car les traitements sont vraiment parallèles. Il n’y a pas de contention ou de verrous limitant le gain. La loi d’Amdahl[13] indique que le gain maximum possible par l’augmentation du parallélisme est fortement limité par la proportion de code non parallélisable. Avec ce modèle également, le gain obtenu n’est limité que par les portions de codes non parallélisables.
+Le programme est un ensemble de portions de code très courtes, non bloquantes. Les cœurs exécutent ces blocs de code en parallèle. La notion de soft-thread n’existe plus.
+Conclusion
+Plusieurs approches permettent de gérer différemment les threads. Les trois premières s’occupent de maintenir le contexte d’appel, pour le reprendre plus tard à la demande (sur événement dans une architecture réactive). Les deux dernières approches se focalisent sur la simplification de la syntaxe, pour exploiter un pool de thread unique pour tout le process.
+Malheureusement, ces technologies ne sont pas présentes dans tous les langages de développement, limitant ainsi les choix pour les développeurs. Dans l’état actuel des technologies, idéalement, notre conviction est de privilégier, pour la facilité du débuggage et de la rédaction du code, dans l’ordre :
+1. Coroutine
+2. Async/await
+3. Pipeline
+4. Continuation
+5. Générateur
+Par ailleurs, pour des critères de performance :
+1. Async/await
+2. Pipeline
+3. Coroutine
+4. Continuation
+5. Générateur
+Dans chaque technologie, il manquerait des frameworks réactifs pour exploiter ces différentes propositions. En effet, il faut injecter les événements asynchrones dans ces technologies, pour réveiller les traitements. Une centaine de lignes de code peuvent résoudre rapidement cela.
+Notre conviction est qu’il faut dorénavant bannir les soft-threads et privilégier un modèle de développement réactif, exploitant uniquement des hard-threads portés par un pool unique à tout le programme. Quelquefois, pour des scénarios spécifiques, les soft-threads feront de la résistance.
+Ce n’est pas un hasard si les langages évoluent pour faciliter ce modèle de développement. Il évident que le modèle réactif va se généraliser.
+________________
+[1]https://fr.wikipedia.org/wiki/Continuation
+[2]https://en.wikipedia.org/wiki/Continuation-passing_style
+[3]http://www.scala-lang.org/files/archive/nightly/docs/library/index.html#scala.util.continuations.package
+[4]https://fr.wikipedia.org/wiki/Coroutine
+[5]http://www.linux-france.org/article/man-fr/man3/setjmp-3.html
+[6]https://commons.apache.org/sandbox/commons-javaflow/
+[7]http://ssw.jku.at/General/Staff/LS/coro/
+[8]https://wikis.oracle.com/display/mlvm/CoroutineJSR
+[9]http://wiki.commonjs.org/wiki/Promises
+[10]https://spark.apache.org/
+[11]http://docs.oracle.com/javase/7/docs/api/java/lang/ThreadLocal.html
+[12]http://vertx.io/manual.html#the-background-pool
+[13]https://fr.wikipedia.org/wiki/Gene_Amdahl

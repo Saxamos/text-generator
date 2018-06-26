@@ -1,0 +1,77 @@
+﻿La révolution réactive
+  
+
+Nous sommes au matin, à l’aube, devant les fortifications. Les hommes sont prêts. Depuis quelque temps déjà, les choses évoluent par petite touche, d’ici de là. Des fissures remettent en cause les fondations. Ailleurs, certains ont déjà franchi le pas. D’autres hésitent. La question n’est plus de savoir si l’on y participe, si l’on résiste, mais à partir de quand on s’y met. Toutes ces évolutions convergent vers le même but : une nouvelle révolution des systèmes d’information.
+Par Philippe PRADOS - 2014
+www.prados.fr
+Dans cette série d’articles, nous allons expliquer un modèle de développement qui se généralise de plus en plus. D’où vient ce modèle, pourquoi, quels en sont les impacts sur les tests, sur les langages de développements, sur les performances, etc. ? Nous essayerons de répondre à toutes ces questions.
+Qu’est que le modèle réactif ?
+Le reactive manifesto définit une application réactive autour de 4 piliers liés entre eux : event-driven, responsive, scalability et resilience.
+Une application réactive est : dirigée par les événements, capable d’offrir une expérience utilisateur optimale, de mieux utiliser la puissance des machines, de mieux tolérer les erreurs et les pannes.
+Le concept le plus fort étant l’event-driven. C’est lui qui détermine le reste.
+Un modèle réactif est un modèle de développement dirigé par les événements. Plusieurs noms permettent de décrire cela. C’est une question de point de vue.
+On peut appeler ce modèle :
+* « event driven », dirigé par les événements
+* « réactif », qui réagit aux événements
+* « push base application », les données sont poussées dès qu’elles sont disponibles
+* On bien encore, « Hollywood », résumé par « ne m’appelez pas, je vous appelle »
+Pour notre part, nous préférons le terme « réactif ».
+Ce modèle d’architecture est très pertinent pour les applications interagissant en temps réel avec les utilisateurs. Cela comprend:
+* Les documents partagés (Google docs, Office 360)
+* Les réseaux sociaux (diffusion de flux, Like/+1)
+* Les analyses financières (flux du marché, enchères)
+* Les informations mutualisées (trafic routier ou de transports en commun, pollution, bons plans, places de parking, etc.)
+* Les jeux multijoueurs
+* Les approches multicanals (le même utilisateur utilise son PC, son mobile et sa tablette)
+* la synchronisation des applications mobiles (toutes au même moment sur les 3 devices de chaque utilisateur)
+* Les API ouverte ou privée (impossible de prévoir l’usage)
+* La gestion d’indicateurs (position GPS,  capteurs sur le terrain, objets connectés)
+* Les afflux massifs d’utilisateurs (manifestations sportives, soldes, pub TV, Startup qui décolle, ouverture sur une nouvelle plateforme mobile, etc.)
+* Les communications directes (chat, hang-out)
+* pour gérer plus efficacement des algorithmes complexes (réservation de places, gestion de graphes , web sémantique, etc).
+* etc.
+Un des points clefs de toutes ces applications est la gestion de la latence. Pour qu’une application soit responsive, l’utilisateur doit percevoir une latence aussi faible que possible.
+Il y a plusieurs architectures possibles permettant de traiter de la scalabilité et de la résilience. Nous traiterons cela dans d’autres articles. Concentrons-nous sur l’amélioration de la latence.
+Améliorer la latence
+Depuis de nombreuses années, les traitements concurrents sont effectués dans des threads différents. Un programme classique est une suite d’instructions qui s’exécute de manière linéaire dans un thread. Afin d’effectuer toutes les tâches qui lui sont demandées, un serveur va gérer un quantité de threads. Mais ces threads vont passer le plus clair de leur temps à attendre le résultat d’un appel réseau, d’une lecture de disque ou d’une requête à une base de données.
+En fait, il existe deux types de threads : les soft-threads et les hard-threads. Les soft-threads sont des simulations de traitements concurrents en dédiant des portions de la CPU à chaque traitement alternativement. Les hard-threads sont réellement des traitements concurrents, exécutés par des cœurs différents du processeur. Les soft-threads permettent, bien heureusement, aux machines d’exécuter simultanément beaucoup plus de threads qu’elles n’ont réellement de coeurs.
+Cependant pour optimiser les performances, Intel recommande :
+* De créer un thread-pool du nombre d’hyper-cœurs et de réutiliser les threads
+* D’éviter les appels au kernel
+* D’éviter de partager les données entre les threads
+Le modèle réactif a pour vocation de supprimer autant que possible les soft-threads en n’utilisant que les hard-threads. Cela permet de mieux exploiter la puissance offerte par les processeurs modernes.
+Depuis longtemps, les technologies réseau présentes dans les routeurs exploitent ce modèle de développement, avec d’excellentes performances.
+L’approche réactive cherche à démocratiser ce principe de développement.
+Pour pouvoir réduire le nombre de threads, il ne faut plus partager la CPU sur une base temporelle, mais sur la base d‘événements. Chaque sollicitation entraîne le traitement d’un bout de code. Ce dernier ne doit jamais être bloquant, afin de libérer la CPU au plus vite pour le traitement de l’événement suivant.
+Pour permettre cela, il faut intervenir dans toutes les couches logicielles : des systèmes d’exploitation aux langages de développement en passant par les frameworks, les drivers hardwares ou de base de données. Toutes ces couches logicielles sont en train de migrer, permettant une prise en compte généralisée de ce modèle d’architecture.
+Mais pourquoi fonctionner comme cela ? Pour plusieurs raisons :
+* Réduire la latence !
+* Améliorer les performances en augmentant le parallélisme
+* Mieux gérer les pics de charges en supprimant la limite arbitraire du nombre de traitements simultanés
+* Mieux exploiter la multiplication du nombre de cœurs dans les CPU
+* Être capable de gérer des flux de traitements (en plus des requêtes/réponses habituelles)
+* Réduire la consommation mémoire
+Ces améliorations permettent de densifier le nombre d’utilisateurs par serveur. Dans les mêmes proportions, cela réduit le coût du Cloud.
+Au niveau technique, cela entraîne :
+* Pas de coût pour la synchronisation des traitements concurrents (uniquement s’il n’y a qu’un seul cœur)
+* Moins d’empreinte mémoire pour maintenir les états (pas de stacks)
+* Meilleur ordonnancement basé sur les priorités réelles des applications
+Le mode réactif permet de ne pas limiter le nombre d’utilisateurs simultanés par un paramètre arbitraire fixé sur le pool de thread. Cette approche est plus à même de réagir aux pics de charges.
+Ces gains potentiels sont parfois contestés dans différentes études. L’évolution des OS, de l’implémentation des threads, des processeurs et des machines virtuelles, type JVM, peuvent remettre en cause les benchmarks réalisés. C’est finalement une combinaison subtile entre ces éléments qui permet de comparer une architecture par rapport à une autre. Il faut, pour cela, généralement prévoir plusieurs développements très différents : l’un réactif, l’autre classique. Cela explique pourquoi il est difficile d’avoir des benchmarks fiables.
+Dans le cadre de travaux de recherche que nous avons menés et présentés au PerfUG, les gains sont notables pour une architecture traitant un flux à haute fréquence. De même, nos travaux sur J2EE pour une utilisation Web classique confirment les gains de performance et la scalabilité de l’architecture.
+Il est certain qu’une structure de données évitant les verrous est un levier très important sur les performances du système. Les nouveaux modèles de données fonctionnels sont alors de bons compagnons aux modèles réactifs.
+Parmi les nouveaux logiciels faisant le plus de buzz, nombreux sont ceux utilisant le modèle réactif en interne. Pour n’en citer que quelques-uns : Redis, Node.js, Storm, Play, Vertx, Axon ou Scala.
+De même, les géants du Web publient leurs retours d’expériences sur la migration vers ce modèle :Coursera, Gilt, Groupon, Klout, Linkedin, NetFlix, Paypals, Twitter, WallMart ou Yahoo.
+Pourquoi maintenant ?
+« Le logiciel ralenti plus vite que le matériel n’accélère »
+Niklaus Wirth  – 1995
+Le modèle réactif n’est pas nouveau. Il est utilisé dans tous les frameworks d’interface utilisateur depuis l’invention de la souris. Chaque clic ou saisie clavier génère un évènement. Même Javascript côté client utilise ce modèle. Il n’y a pas de thread dans ce langage, pourtant il est possible d’avoir plusieurs requêtes AJAX simultanément. Tout fonctionne à l’aide de call-back et d’événements.
+Les architectures de développement actuelles sont le résultat d’une succession d’étapes et d’évolutions. Certains concepts forts ont été introduits et utilisés abondamment avant d’être remplacés par de nouvelles idées. L’environnement évolue également. Les réponses à apporter ne sont alors plus les mêmes.
+Est-ce que nos systèmes ne sont pas déjà aux limites de puissance ? Reste-t-il des espaces à conquérir ? Des gains de performances à découvrir ?
+Il existe, dans nos systèmes, un énorme gisement de puissance inexploité. Si l’on double le nombre d’utilisateurs, on peut ajouter un serveur. Nos clients nous font part d’une augmentation d’un facteur 20 depuis la démocratisation des mobiles. Est-ce raisonnable de multiplier le nombre de serveurs en proportion ? Est-ce que cela sera suffisant pour faire fonctionner votre SI ? Ce n’est pas certain. Il est préférable de revoir la copie pour enfin, exploiter toute la puissance disponible.
+Il y a des cycles processeurs disponibles. C’est une évidence. C’est ici que se trouve le gisement de puissance. Comme nos programmes passent l’essentiel de leur temps à attendre des disques, du réseau ou des bases de données, nous n’exploitons pas le potentiel de nos serveurs.
+Un modèle de développement fondé sur des événements est appelé « réactif ». Ce dernier devient maintenant disponible pour tous. Il est de mieux en mieux intégré dans les langages de développements modernes.
+De nouveaux patterns de développement sont alors proposés. Ils intègrent dès le démarrage du projet la gestion de la latence et des performances. Ce n’est plus un challenge à relever lorsque tout est terminé et qu’il n’est plus possible de modifier l’architecture de l’application.
+Nous avons la conviction que ce modèle de développement va s’imposer dans les années à venir. Il est temps de s’y attarder.
+Au vu des applications candidates au modèle réactif, les applications basées sur le modèle requête/réponse (HTTP/SOAP/REST) peuvent tolérer un modèle thread, par contre, les applications basées sur des flux comme JMS ou WebSocket auront tout à gagner de fonctionner sur un modèle fondé sur des événements et quelques soft-threads.
+Nous verrons dans d’autres articles d’où vient cette évolution et les impacts sur toutes les couches logicielles (base de données, mainframe, routage, failover, haute-disponibilité, etc.)

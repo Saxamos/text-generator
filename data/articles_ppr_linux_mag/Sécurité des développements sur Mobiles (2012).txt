@@ -1,0 +1,617 @@
+﻿Sécurité des développements sur Mobiles
+  
+
+Nous allons maintenant étudier les différents sujets devant être traité par une application mobile, pour renforcer la sécurité.
+Par Philippe PRADOS - 2012
+www.prados.fr
+Habilitations
+Il est important de connaître avec certitude, qui utilise le terminal et avec quel privilège.
+Authentification
+Les Smartphones ou Tablettes sont considérés être la propriété d'un seul et unique utilisateur. Ce postula n'est pas toujours vrais concernant les tablettes. Il n'y a donc aucun mécanisme pour protéger les informations d'un utilisateur par rapport à un autre.
+L'authentification est un processus permettant de vérifier l'identité de l'utilisateur d'un service ou d'un terminal.
+Tous les systèmes mobiles (IOS, Android et Windows Phone) demandent la saisie d'un mot de passe ou d'un code PIN. Android propose également la reproduction d'un schéma sur une matrice de neuf points ou la reconnaissance faciale (sécurité faible).
+Ce processus est considéré comme suffisant pour protéger les informations du terminal et authentifier l'utilisateur. Le téléphone peut être désactivé après un délai paramétrable.
+De plus, chaque application est signée et authentifiée. Il n'y a donc pas d'API permettant d'identifier l'utilisateur. Dès lors qu'il a accès à l'application, il est authentifié.
+Il peut être nécessaire d'authentifier l'utilisateur lors d'une connexion réseau. Il faut alors ajouter des identifiants complémentaires, protégés par le code secret initial de dévérouillage. Ces identifiants peuvent être injectés dans les requêtes réseaux pour permettre aux serveurs d'identifier l'utilisateur.
+Mémoriser ces identifiants dans chaque application présente un inconvénient majeur : L'identifiant et le mot de passe sont présent à de nombreuses reprises en mémoire et sur disque. Une faiblesse dans une seule application permet de révéler les secrets pour l'exploiter dans toutes les autres.
+________________
+Il n'est pas possible de garantir, du point de vue du serveur, qu'une communication vient d'une application ou d'un terminal particulier.
+________________
+Autorisation
+L'autorisation est le processus vérifiant les privilèges à accorder à un utilisateur authentifié pour effectuer des traitements ou accéder à des données.
+Chaque application doit être isolées des autres applications présentes dans le même terminal, afin de protéger la confidentialité des données.
+Android utilise une approche dérivée de la notion d'utilisateur sous Linux. Chaque application possède un utilisateur spécifique créé lors de l'installation de l'application. Un répertoire de travail est alors alloués dont seul ce dernier possède les droits.
+Plusieurs applications différentes, signées par le même certificat (venant du même développeurs), peuvent partager le même utilisateur Linux, et donc partager les droits d'accès aux données.
+Une application peut également modifier les droits de certains fichiers pour permettre un accès en lecture et/ou écriture aux autres applications.
+IOS propose une approche similaire pour isoler l'accès aux fichiers pour chaque application. Lorsqu'un fichier doit être partagé par plusieurs applications, il est intégralement recopié dans le contexte des autres applications. Il n'est alors plus possible de contrôler son cycle de vie.
+Toutes les applications sont considérés comme identiques, et peuvent avoir accès à de nombreuses ressources, sans prévenir l'utilisateur. Un module kernel (SeatBelt) permet d'indiquer des privilèges aux différents programmes. Apple documentes 5 privilèges et en exploite 9 autres.
+Windows Mobile ne propose pas d'accès directs aux fichiers. Les applications doivent utiliser une API spécifique isolant les fichiers de chaque application. Il n'est pas possible de partager des ressources entres les applications.
+Privilèges
+Sous Windows Phone, Microsoft déduit les privilèges nécessaires à l'exécution d'une application, des API qu'elle utilise. Il est ainsi possible de les présenter à l'utilisateur avant l'installation de l'application. Par contre, il n'est pas possible de déclarer de nouveaux privilèges.
+Sous Android, chaque application doit décrire les privilèges nécessaires à son exécution dans un fichier AndroidManifest.xml. Ainsi, l'utilisateur sait, avant l'installation, les exigences de l'application. Il ne peut sélectionner ponctuellement les privilèges qu'il accorde.
+Il n'est pas possible d'écrire un code qui utilise une stratégie de replis en cas absence de privilèges, pour éviter d'alerter inutilement l'utilisateur.
+Un privilège est une simple chaîne de caractères. Toutes applications peut en déclarer de nouvelles.
+<permission
+        android:description="@string/permission_discover_desc"
+        android:label="@string/permission_discover_label"
+        android:name="org.myapp.DISCOVER"
+        android:permissionGroup="android.permission-group.NETWORK"
+        android:protectionLevel="signature" />
+Le niveau de protection indiqué dans l'attribut  android:protectionLevel peut avoir plusieurs valeurs :
+* normal si toutes les applications peuvent en bénéficier que cela ne présente pas de risque particulier. Lors de l'installation de l'application, cette permission n'est pas mises en avant. Elle peut être consultée à la demande.
+* dangerous si le privilège peut avoir un impact important pour l'utilisateur (coût, accès des informations personnelles, etc.) Une alerte spécifique est indiquée lors de l'installation de l'application. Les alertes sont classées suivant le groupe.
+* signature si le privilège ne peut être accordé qu'aux applications possédant la même signature numérique. Cela est très pratique pour partager des informations entres applications de la même entreprise.
+* signatureOrSystem si le privilège ne peut être accordé qu'aux applications systèmes ou aux applications signées avec le certificat de la plate-forme.
+Pour déclarer qu'une application utiliser un privilège, il faut utiliser le marqueur <uses-permission>.
+<uses-permission android:name="android.permission.INTERNET" />
+Une méthode peut vérifier que l'appelant d'une méthode d'un objet distant possède un privilège particulier avec la méthode checkCallingPermission() ou en interrogeant les privilèges d'une application ( checkPermission() ).
+Ce mécanisme n'est pas suffisant si vous utilisez un fournisseur de contenues. Un fournisseur de contenu peut vouloir se protéger en lecture et en écriture, tandis que ses clients directs ont également besoin de publier les URI des données à d'autres applications pour qu'elles fonctionnent avec.
+Un exemple typique est les pièces jointes dans une application de messagerie. L'accès aux mails doit être protégés par des autorisations, car ce sont des données utilisateurs sensibles. Toutefois, si un URI d'une image en attachement est donnée à une visionneuse d'images, la visionneuse d'image n'aura pas la permission d'ouvrir la pièce jointe car elle n'a aucune raison d'avoir une permission d'accéder à tous les mails.
+La solution à ce problème est une délégation de privilège : lors du démarrage d'une activité ou lors du retour d'une activité, l'appelant peut mettre Intent.FLAG_GRANT_READ_URI_PERMISSION et / ou Intent.FLAG_GRANT_WRITE_URI_PERMISSION. Cela accorde temporairement la permission à l'activité d'accéder à l'URI, indépendamment du fait qu'elle en possède les autorisations.
+Les méthodes grantUriPermission(), revokeUriPermission() et checkUriPermission() permettent de traiter cela.
+Ainsi, une application peut venir de la place marché ou d'autre part, elle présente les mêmes garanties de sécurité. C'est à l'utilisateur de vérifier que les privilèges demandés ne sont pas excessifs.
+Pour le moment, iOS ne propose pas de notion de privilège. Les applications sont toutes au même niveau.
+La philosophie est basé sur une approche « on demande ». C'est lors de l'utilisation d'API sensible qu'une confirmation est demandé à l'utilisateur. Puis, cette confirmation est mémorisé pour toujours.
+Par exemple, pour obtenir les informations géographiques, il faut obtenir l'accord de l'utilisateur. Ensuite, cela est mémorisé en association de l'application.
+Des données sensibles sont ainsi disponibles aux applications, comme par exemple, l'intégralité de l'annuaire. Cela devrait être corrigé prochainement.
+Cette approche présente un dilemme pour Apple. En effet, est-il pertinent de demander constamment à l'utilisateur son accord pour chaque traitement ? Comment gérer les situations ou le privilège est nécessaire à un traitement en tâche de fond ? Est-ce que l'expérience utilisateur, si chère à la marque à la pomme, n'en sera pas dégradé ?
+Apple travaille à étendre le modèle de Sand-box pour intégrer des notions plus fines, comme le propose Android.
+Les approches d'Android et de Windows Phone sont différentes. Elles ne permettent pas à l'utilisateur de comprendre les effets pervers de la combinaison de plusieurs privilèges. Mais une fois l'application installée, l'utilisateur n'est plus sollicité.
+Déblocage du téléphone
+Les constructeurs peuvent bloquer les téléphones afin d'interdire un usage non-voulue, ou pour maintenir la garantie. Cela limite les possibilités des utilisateurs.
+Les téléphones Apple, Windows Phone ou les terminaux Android peuvent être déverrouillés. Cela permet d'étendre les capacités du terminal, mais ouvre également la porte à des vulnérabilités supplémentaires. Par exemple, une application peut demander le privilège administrateur (root) et ainsi avoir accès à tous les fichiers de toutes les applications.
+Certaines versions des OS mobiles sont vulnérables, et permettent une élévation de privilège temporaire ou définitive, à l'insu de l'utilisateur. Une application peut obtenir les privilèges administrateur et contourner tous les mécanismes de sécurités. Il n'y a pas de solution contre cela sauf à maintenir à jour le terminal.
+Certains anti-virus Android sont capables, avec un téléphone débloqué, d'offrir une meilleure sécurité. En effet, ils sont ainsi capable d'invalider la connexion USB (point d'entré généralement utilisé pour obtenir un accès administrateur), de résister à une réinitialisation du téléphone, etc.
+Il y a donc un compromis entre la sécurité imposée par le constructeur pour offrir sa garantie, et les capacités étendues du terminal pour améliorer sa sécurité et ses fonctionnalités.
+________________
+Du point de vue du développeur, un téléphone débloqué ne permet plus de protéger les secrets contre une application ayant les privilèges administrateurs.
+________________
+Il est possible de détecter un téléphone débloqué.
+Sous Android :
+public static boolean isDeviceRooted()
+{
+        if (checkRootMethod1()) return true;
+        if (checkRootMethod2()) return true;
+        if (checkRootMethod3()) return true;
+        return false;
+}
+
+
+private static boolean checkRootMethod1()
+{
+        String buildTags = android.os.Build.TAGS;
+
+
+        if (buildTags != null && buildTags.contains("test-keys"))
+        {
+                return true;
+        }
+        return false;
+}
+
+
+private static boolean checkRootMethod2()
+{
+        Process process = null;
+        DataOutputStream os = null;
+        try
+        {
+                process = Runtime.getRuntime().exec("/system/xbin/which su");
+                process.waitFor();
+                if (process.exitValue() != 0)
+                {
+                        return false;
+                }
+                return true;
+        }
+        catch (Exception e)
+        {
+                return false;
+        }
+        finally
+        {
+                if (os != null)
+                {
+                        try
+                        {
+                                os.close();
+                                process.destroy();
+                        }
+                        catch (Exception e)
+                        {
+                        }
+                }
+        }
+}
+
+
+private static boolean checkRootMethod3()
+{
+        try
+        {
+                File file = new File("/system/app/Superuser.apk");
+                if (file.exists())
+                {
+                        return true;
+                }
+        }
+        catch (Exception e)
+        {
+        }
+        return false;
+}
+Sous iOS :
+bool isJailBreak()
+{
+ int result=fork() ;
+ if (!result) // Le fils peut sortir
+   exit(0);
+ return (result>=0) // Si fork fonctionne, jailbroken
+}
+Élévation de privilège
+Sauf vulnérabilité des OS, il n'est pas possible d'élever temporairement les privilèges d'une application mobile.
+Les applications sensibles tournent sous un privilège administrateur dans Android et iOS. Ainsi, une compromission d'une seule application permet d'attaquer l'intégralité du périphérique.
+Sous Android, pour ne pas compromettre la sécurité, un terminal débloqué propose généralement une confirmation de l'utilisateur pour obtenir le privilège administrateur, temporairement ou définitivement. Il faut dans ce cas faire attention qu'une application ne puisse pas exploiter cela pour consulter les informations des autres applications.
+Il est de la responsabilité de l'utilisateur d'accorder ce privilège maximal aux applications de confiances.
+Sous iOS ou Windows Phone, un téléphone libéré ne présente plus de sécurité. Il y a un fort risque à utiliser un téléphone débloqué.
+Protéger les données
+Pour protéger l'utilisateur lors des communications réseaux ou contre le vol du terminal, il est important d'utiliser correctement les services cryptographiques proposés par la plate-forme.
+Chiffrement
+De nombreuses application et site Web requière des identifiants et des mots de passe. C'est une mauvaise pratique de sécurité d'utiliser le même mot de passe partout. D'un autre coté, peu d'utilisateur sont capable de mémoriser un large ensemble de mot de passe.
+L'authentification et l'autorisation permettent de protéger un service accédé localement ou à distance. Si un individu possède un accès physique au terminal, il peut contourner toutes ces protections afin d'avoir accès directement à la mémoire ou au support de sauvegarde. Une analyse de ces derniers peut révéler des secrets comme les mots de passes, les clefs privées des certificats, etc.
+Il est alors nécessaire d'utiliser des technologies de chiffrements pour protéger les informations sensibles.
+Il existe plusieurs technologies permettant de chiffrer des données. Les algorithmes symétriques utilisent la même clef pour chiffrer et pour déchiffrer les données. Ils sont rapide mais exigent un partage de secret entre les deux parties. Les algorithmes asymétriques utilisent des clefs différentes mais liés entre elles mathématiquement. Une clef sert à déchiffrer ce que l'autre chiffre et réciproquement. Ces algorithmes évitent le partage de secret entre les parties, mais sont beaucoup plus lents à l'exécution.
+Une combinaison des deux approches est généralement utilisées. Une clef symétrique est générée pour chaque flux. Cette clef est chiffrée à l'aide d'une clef asymétrique avant d'être envoyée. Le destinataire peut déchiffrer la clef, puis l'utiliser pour déchiffrer le flux symétrique.
+Lors de la négociation de la clef symétrique, il est important d'utiliser un algorithme de générateur de nombre aléatoire qui ne soit pas prédictible. Il doit présenter des garanties de sécurités.
+Des algorithmes de calcul de Hash sécurisés permettent également de vérifier la validité des certificats numériques. Un calcul de hash est un algorithme qui transforme une information de taille variable en une information de taille fixe, par un procédé mathématique. Plusieurs flux différents peuvent générer la même valeur de hash, mais les algorithmes sont conçu pour qu'il soit très difficile de générer un flux valide à partir du hash. Ainsi, le résultat du calcul de hash peut être considéré comme un représentant de la donnée initiale.
+Tous les OS mobiles proposent des APIs pour cela. Ils sont rarement implémentés par un composant électronique spécifique (sauf sous iOS). Cela à donc un impact important sur la vitesse d'exécution et la consommation électrique.
+Ces technologies sont à utiliser avec prudence pour maintenir le niveau de sécurité. Une utilisation erronée de ces APIs peuvent invalider la sécurité. Par exemple, utiliser toujours la même clef pour chiffrer des données différentes permet, dans certaines situations de découvrit toute ou partie d'un contenu chiffré. Chiffrer un mot de passe sans ajouter d'aléa peut exposer les données à une attaque utilisant une table pré-calculée, etc. Il est préférable de faire appel à des experts en sécurités lors de l'utilisation de ces APIs.
+Attention, le chiffrement complexifie la découverte des données sensibles, mais ne l'interdit pas, car la clef primaire doit obligatoirement être présente quelques parts. Soit elle est saisie lors de l'alimentation ou le déverrouillage du terminal et est alors présente en mémoire ; soit elle est présente en clair quelque part sur le disque. Dans le premier cas, il est possible d'extraire les informations de la mémoire si le terminal est toujours alimentés, dans le deuxième cas, une analyse du disque peut révéler le secret racine, permettant de déchiffrer toutes les autres données.
+Pour iOS, toutes les données présentes sur le disque sont chiffrées, mais en utilisant une clef facilement récupérable. Seul les mails et les pièces jointes utilisent un chiffrement associé au code de dévérouillage de l'utilisateur. De nombreuses attaques sur IPhone montrent qu'en manipulant quelques minutes un téléphone, il est possible de récupérer l'intégralité des informations qu'il contient. En effet, une grande partie des informations ne sont pas réellement chiffrée car la clef est disponible. Les autres informations chiffrées peuvent être attaqué en force brute en 20 minutes.
+Pour Android, depuis la version Honneycomb, il est possible de chiffrer toutes les données d'un terminal Android.  Une clef est exigé au démarrage du téléphone pour pouvoir déchiffrer à la volé tous les bloques de la mémoire flash. Une clef de 128 bits est dérivé du mot de passe de l'utilisateur. Cela a un impact sur les performances, négligeable sur les téléphones hauts de gamme. Si l'utilisateur utilise une clef numérique à quatre chiffre, cela ne fait que 10.000 combinaisons à tester.
+Notez qu'un téléphone chiffré Android venant d'être allumé propose tous de même les appels d'urgence ! Un version légère de l'OS est démarré avant de demander le code de déverrouillage à l'utilisateur. Ensuite, l'OS redémarre en déchiffrant les données.
+Pour Windows Phone 7, la clef de déchiffrement doit être physiquement inaccessible. C'est une exigence de Microsoft. La carte SD éventuelle utilise un clef propre au téléphone. Lorsqu'elle est éjectable, elle ne peut être exploitée par un autre périphérique.
+Les technologies proposées permettent de protéger les données contre une lecture physique de la mémoire. Mais les applications ont un accès déchiffré aux données. Il est alors possible d'exploiter une vulnérabilité des applications pour accès à ces données sans avoir à les déchiffrer.
+Les attaques pour récupérer les informations d'un téléphone Windows Phone consiste à injecter des DLL avec des applications[1]. Plusieurs applications permettent ainsi de récupérer l'intégralité des fichiers et des bases de registres.
+Sous Android, les applications peuvent être installées sur la carte SD. Cela peut présenter un risque si celle-ci est extraite du téléphone. Pour éviter cela, un secret est généré pour chaque application. Puis, lors de l'installation d'une application dans la carte SD, un fichier chiffré est généré, avec l'application et les données de cette dernière. Android monte un disque virtuel par application pour déchiffrer à la volée les données. Ainsi, les informations des applications sur la carte SD ne sont pas accessibles en dehors du téléphones. Elles sont généralement placées dans une partition spécifique pour ne pas perturber l'utilisateur.
+En théorie, connaissant les fichiers d'une application non déposé sur la carte SD (clair connu) et son équivalent chiffré présent sur la carte SD, il est possible par un simple XOR d'obtenir le flux de déchiffrement, et de là, l'attaquer pour trouver une clef de chiffrement produisant la même suite de valeur. Ainsi, il est possible de déchiffrer l'intégralité des informations présentes sur une application de la carte SD.
+Depuis Ice Cream Sandwich (Android v4), il est également possible d'utiliser un conteneur sécurisé pour les autorités de certification, ou les clefs privées des applications. Les certificats ne sont disponibles que pour chaque application, avec une clef qui leurs est propre. Le conteneur des certificats est lui même chiffré, via une clef racine, elle même chiffrée 4096 fois (pour éviter les attaques en force brute), à partir de l'information de déblocage du téléphone. Ainsi, sans connaître cette information principale, il n'est pas possible d'avoir accès aux clefs privées.
+Lors du chiffrement du téléphone, c'est le même code qui est utilisé. Il est ensuite possible d'utiliser deux codes différents. L'un pour le déchiffrement du terminal, l'autre pour le déblocage de la session. Lorsque le mode chiffrement est activité, seul un code PIN ou un mot de passe peut et doit être utilisé pour la session. Il n'est plus possible d'utiliser un schéma, la reconnaissance du visage, ou l'absence de code de dévérouillage.
+IOS propose un stockage chiffré pour les mots de passes (keychain). Avant la version 4, le chiffrement utilise une clef unique pour tous les périphériques. Depuis, la clef est différente pour chaque périphérique, mais indépendante du déverrouillage du l'utilisateur. En possession du téléphone, il est possible de déchiffrer le keychain avec toutes les clefs associées aux applications.
+________________
+Sous iOS, suivant le niveau de criticité de l'application, il est préférable d'utiliser un mécanisme différent pour la sauvegarde des informations confidentielles.
+________________
+Windows Phone ne propose pas de conteneur centralisé chiffré, considérant que l'intégralité du disque étant chiffré, cela n'est pas nécessaire.
+Ces mécanismes permettent théoriquement de protéger les données de l'utilisateur contre un vol du terminal ou entres applications. Malheureusement, chaque technologie présente des vulnérabilités permettant de récupérer les informations chiffrées sur les différentes versions de IOS, ou les versions antérieurs à 4.0 sur Android.
+Il est donc très difficile de se protéger contre un vol de terminal. Il faut éventuellement utiliser une demi-clef fourni par un serveur et gardé en mémoire, ajouter un sel dépendant de la position géographique de l'utilisateur (tel clef ne peut être déchiffrée que dans les locaux de l'entreprise) ou combiner plusieurs techniques.
+Demander un mot de passe complexe et long à l'utilisateur semble être la seule solution, mais cela à un impact sur l'interface utilisateur, car la notion de début et de fin d'une application est très floue dans ces environnements. La saisie d'un mot de passe n'est pas une chose aisée. Il faut alors redemander régulièrement le mot de passe à l'utilisateur, ce qui alourdie grandement l'application.
+Comme l'utilisateur à accès à tous les secrets, il ne faut pas utiliser ces technologies pour protéger des secrets des vendeurs présents dans les applications contres les utilisateurs. Un utilisateur à toujours la possibilité d'analyser l'intégralité du disque à la recherche d'un mot de passe en dur dans une application, d'un ticket pour utiliser une API, etc.
+________________
+Les mots de passes et les sauvegardes de formulaires utilisés par un composant WebKit sont mémorisé dans une base de donnée qui n'est pas chiffré.
+________________
+Communication sécurisée
+Les technologies TLS et SSL permettent d'ouvrir une communication sécurisée avec un serveur authentifié, et éventuellement d'authentifier l'utilisateur via un certificat. Les communications sont chiffrées à l'aide d'une clef symétrique négociée lors de la première connexion. Cette clef peut être réutilisée pour les connexions suivantes, accélérant ainsi l'initialisation des connexions.
+Le protocole TLS n'est pas interopérable avec le protocole SSL. Essayez une connexion SSL en cas d'échec d'une connexion TLS.
+Comme pour toute communication réseau, il est préférable d'utiliser une communication chiffrée. Cela a un impact sur les performances car le réseau en mobilité est très volatile est présente une latence importante. L'ouverture d'une connexion TLS/SSL nécessite plusieurs échanges avant la négociation d'une clef de session. Ces échanges sont particulièrement ralentis par la latence d'une connexion 2G/3G. Après une déconnexion intempestive, il est nécessaire de rouvrir la connexion. Le serveur doit avoir un cache TLS/SSL correctement valorisé pour permettre de recycler les clefs précédemment négociées.
+Les certificats numériques permettent d'identifier un service, un utilisateur ou un serveur. Ils peuvent contenir des extensions spécifiant les usages appropriés. C'est aux applications de vérifier la cohérence entre les capacités du certificat et les usages. (“Puis-je utiliser ce certificat pour cet usage ?”)
+Android propose des API pour gérer directement des sockets ou des connexions HTTP en exploitant TLS ou SSL. Il est possible de présenter un certificat client ou de valider un certificat serveur avec l'autorité de certification que l'on souhaite.
+IOS ne propose pas d'API direct pour utiliser des sockets chiffrés. Il faut utiliser le framework CFNetwork à la place, qui est une abstraction de différentes couche de communication.
+Windows Mobile permet d'ouvrir des communications sécurisé, via une API spécifique, à condition que le certificat présenté par le serveur est été authentifié par une autorité connue du terminal.
+________________
+Windows phone ne permet pas d'enrichir la liste des autorités de certification ou de présenter un certificat client. Cela limite, pour le moment, les connexions chiffrées.
+________________
+Si l'utilisateur de l'application n'est pas un expert en sécurité, il est important de l'informer d'un problèmes sur un certificat avec un message simple et aussi clair que possible. Par exemple, si un certificat ne peut être vérifié car l'autorité de certification racine est inconnu, il est possible de proposer à l'utilisateur d'accepter et d'importer le certificat en lui expliquant les risques que cela représente.  
+VPN
+Pour protéger les applications des entreprises, il est possible d'ouvrir un réseau privé virtuel entre le terminal et l'entreprise. Ainsi, le terminal peut avoir un accès aux serveurs de l'entreprise, et il y a une garantie que toutes les communications seront chiffrés avant d'utiliser Internet.
+Un VPN est à utiliser lors des phases de développement, pour tester l'invocation de services via une connexion 3G. En effet, sinon, un service non encore déverminé ou sécurisé serait exposé sur Internet. Une attaque par ce canal est alors possible.
+Sous Android, depuis Ice Cream Sandwith, il est possible d'imposer l'ouverture d'un VPN pour pouvoir utiliser une application spécifique. Si un autre VPN était ouvert précédemment, ce dernier est fermé.
+IOS propose de nombreuses technologies de VPN. Il s'agit d'un paramétrage global du téléphone[2]. Toutes les communications passent ainsi par ce canal.
+Pour le moment, Windows Phone 7 ne propose pas d'intégration à un VPN.
+Effacement des données
+Des données sensibles doivent pouvoir être effacées du disque du téléphone, lorsqu'elle ne sont plus nécessaire. Ainsi, un vol du terminal ne permettra pas de les révéler.
+C'est un objectif simple, et pourtant très difficile à obtenir, pour plusieurs raisons.
+Les fichiers
+Nous devons d'abord traiter le cas des simples fichiers.
+Les technologies mobiles n'utilisent pas de vrai disque dur magnétique, mais plutôt des cartes de mémoire statique. Ces mémoires ont un inconvénient majeur pour la sécurité : chaque bloque à un nombre limité d'écriture. Si un programme écrit en permanence sur le même bloque, ce dernier finira par être grillé.
+Pour améliorer la durée de vie de ces mémoires, il existe des gestionnaires de fichiers spécialisés, se chargeant de distribuer au maximum les bloques, pour uniformiser le nombre d'écriture de chacun. Lorsqu'un bloque est finalement devenu invalide, un autre prend sa place.
+Donc, avec ce type de gestionnaire de fichier, il est très difficile d’effacer un fichier, puisque par définition, la nouvelle version des données sera en réalité écrite dans un autre bloque. Android est confronté à ce type de difficulté sur les modèles utilisant le gestionnaire yaffs2.
+Cette information n'est généralement pas connu des applications. Les dernières versions de l'OS sacrifie le bon usage des mémoires flashs pour utiliser le format ext3/4. Dans ce cas, il est possible d'écraser les données d'un fichier avant de l’effacer logiquement.
+Les procédures d'écritures multiples avec différentes valeurs, proposées pour les médias magnétiques ne sont pas nécessaire pour les mémoires flashs.
+Pour iOS, depuis la version 4, il est possible d'effacer instantanément un fichier, en détruisant sa clef de chiffrement. Ainsi, il n'est théoriquement pas nécessaire d'effacer avant son contenu.
+Sauf que dans le journal du gestionnaire de fichier HFS, on retrouve souvent les clefs des fichiers ainsi effacés. Il est alors possible des les reconstituer.
+On retrouve alors
+* Les anciennes versions des fichiers « properties » ;
+* Des messages vocaux effacés ;
+* Toutes les données saisies par l'utilisateur dans une application dans un cache ;
+* Des photos ou d'autres données personnelles.
+* les copies d'écrans des différentes applications, avec parfois des informations confidentielles !
+* Le contenu des pages WEB chiffrées ;
+En effet, lorsqu'une application quitte le premier plan, iOS prend un cliché et le sauve dans un fichier. Lorsque l'application revient au premier plan, pour faire croire à un accès ultra rapide, iOS reprend le cliché, l'efface du disque, puis fait une animation pour le présenter à l'écran. Pendant ce temps, l'application est démarré en tâche de fond. Elle reprend la main sur l'écran lorsque tous est prêt. Du point de vue de l'utilisateur, il a l'impression que l'application est disponible immédiatement, ce qui est un leurre. Seul le dernier écran est visible.
+Pour supprimer ce risque, il faut cacher l'écran avant la prise du cliché.
+- (void)applicationWillResignActive:(UIApplication *)application
+{
+[ UIApplication sharedApplication ].keyWindow.hidden = YES ;
+}
+- (void)applicationDidEnterBackground:(UIApplication *)application
+{
+[ UIApplication sharedApplication ].keyWindow.hidden = YES
+}
+Il est possible qu'une vulnérabilité équivalente soit possible sous Android depuis la version 3, car le gestionnaire de tâche prend en effet un cliché de l'écran. Où est-il mémorisé ? Il faudrait consulter les sources pour le savoir.
+Pour Window Phone 7, nous n'avons pas d'information sur le format utilisé, mais nous pouvons supposé que l'écrasement des données du fichier avant son effacement suffise.
+Pour conclure, il est préférable d'effacer les données sensibles en les écrasants, avant d'effacer les fichiers, même sous iOS.
+Les bases de données
+Traitons maintenant le cas des bases de données. Android et IOS propose une interface sur sqlite. Microsoft propose sa propre base de donnée locale.
+Récupérer les données effacées d'une base de donnée est plus facile que de récupérer un fichier entier, car les données ne sont pas réellement détruite. Elles sont juste déclarées comme absente, jusqu'à la réorganisation des données.
+Certains développeurs utilisent l'option auto_vaccum pour détruire les enregistrements effacés. Malheureusement, cette option ne défragmente pas la base de données et les enregistrements effacés sont récupérables.
+Il est nécessaire de demander explicitement à la base de donnée de se reconstruire, via l'instruction vacuum[3]. Ce n'est pas raisonnablement envisageable lors de chaque effacement d'enregistrement.
+Une approche plus efficace consiste à mettre à jour l'enregistrement avant de l'effacer, pour y détruire physiquement les données. La taille de la donnée est critique, car si la taille de la donnée d'écrasement est plus grande que la donnée actuelle, un nouvel enregistrement est créé, laissant les données actuelles visibles.
+Une bonne approche consiste à utiliser la fonction ZEROBLOB pour produire une donnée de la bonne taille.
+sqlite> UPDATE messages SET message = ZEROBLOB(15) WHERE ROWID=1 ;
+sqlite> DELETE FROM messages WHERE ROWID=1;
+Une autre approche consiste à utiliser une sur-couche à sqlite pour chiffrer les données. Le projet SQLCipher[4] propose cela.
+Autocorrection du clavier
+Pour aider à la saisie, iOS mémorise toutes les données en claire, sauf exception :
+* Les champs marqués comme « mot de passe »;
+* Les chaînes ne contenants que des chiffres ;
+* Les champs avec l'auto-correction désactivé ;
+* Les données très courtes d'un ou deux caractères ;
+La façon la plus simple de désactiver cette fonctionnalité pour un champ particulier :
+UITextFiled *textField = [ [ UITextField alloc ] initWithFrame : frame ] ;
+textField.autocorrectionType = UITextAutocorrectionTypeNo ;
+De plus, le champ peut de plus être marqué comme critique et ne pas présenter ces caractères.
+TextField.secureTextEntry = YES ;
+Sous Android, il faut utiliser une instance de AutoCompleteTextView[5] pour cela. A l'application d'être vigilante.
+PIN aléatoire
+Lors de la saisie d'un code PIN, comme les chiffres sont toujours à la même place, une observation astucieuse de l'utilisateur permet d'en déduire rapidement la valeur. Cela peut s'effectuer par une observation attentive, par une caméra dissimulée, par l'analyse de la position des mouvements du téléphone lors de la saisie, etc.
+Pour réduire le risque d'un vol de secret, dont nous savons maintenant à quel point il porte l'intégralité de la confidentialité du terminal, il peut être judicieux d'utiliser un clavier dont les positions des chiffres sont aléatoires. Quelques touches vides améliorent encore la sécurité de la saisie.
+Vol du téléphone
+Les smartphones sont les cibles favorites des voleurs à l'arraché. Le voleur peut-il alors avoir accès à toutes les informations confidentielles ? Cela dépend des capacités du voleur.
+Protection de la mémoire
+Si ce dernier est motivé (ou gouvernemental) et que le téléphone est allumé, il est possible d'obtenir une copie de toute la mémoire (Cold Boot Attaque[6]).
+Les techniques pour se protéger d'une copie de la mémoire sont complexes et généralement hors de portées de ces terminaux. Il faudrait utiliser des registres du microprocesseur à la place de la RAM. Les technologies mobiles n'ont pas de registres disponibles pour cela.
+Pour obtenir plus facilement un accès la mémoire, le téléphone doit précédemment avoir été injecté d'un logiciel espion, ou avoir été déverrouillé. Ainsi, il est possible d'utiliser le déverminage ou d'ajouter des logiciels spécifiques, pour intervenir sur une application lors de son exécution. Tous les secrets quelle protège sont alors à porté de main.
+Sous iOS, une donnée en mémoire sensible doit être physiquement effacé dès que possible. Cela est facile en C ou Objective-C, car la mémoire est accessible directement par les programmes.
+Sous Android, les choses sont plus complexe, car les objets Java sont géré par un ramasse miette qui peut dupliquer les instances où il le souhaite, sans contrôle de l'application. Une donnée sensible doit alors être protégé par un code natif codé en C ou C++, afin de garantir l'effacement réel de la donnée.
+Sous Windows Phone, l'utilisation d'un code natif est interdit. Les données ne peuvent pas être effacé de la mémoire avec certitude.
+Protection du disque
+De même une copie du disque du téléphone peut être obtenu via un accès aux composants.
+Pour protéger les données sur la mémoire de masse, il est possible de chiffrer les données sensibles, moyennant un surcoût sur le temps d'accès. Il est également possible de ne protéger que les clefs privées permettant de ne chiffrer que les données particulièrement sensibles (identifiant et mot de passe).
+Nous avons vue que ces techniques sont parfois fragiles.
+Gestion du parc
+Android propose un framework permettant aux entreprises de définir des règles de sécurités de son parc de mobile (blocage du terminal obligatoire, utilisant une technologie particulière avec des contraintes sur les mots de passes, etc.). Cette dernière permet d'offrir différentes techniques d'intervention à distance. Via des communications par SMS, il est possible de localiser le mobile, d'effacer les données, etc.
+Par exemple, l'application gratuite Avast Mobile Security[7] propose ces services. Si la carte SIM est modifiée, un SMS discret est envoyé à un numéro de téléphone pré-définie. Cela permet d'identifier le nouveau numéro de téléphone et de le localiser.
+Windows Phone propose également une gestion de parc, permettant d'imposer des contraintes sur les mots de passes utilisés sur le téléphone, avec éventuellement, effacement de ce dernier après trop d'échecs. Les utilisateurs peuvent localiser un téléphone perdu après enregistrement sur le site windowsphone.live.com. Le parc des terminaux est contrôle via Outlook. Il est ainsi possible d'effacer à distance un téléphone.
+iOS propose une approche équivalente, permettant un effacement instantané du téléphone, par l'écrasement des clefs de chiffrement.
+En mode avions, un téléphone volé n'est plus sous contrôle et toutes ces informations peuvent être récupérés.
+L'emprunt d'un téléphone pendant une courte période peut également révéler tous les secrets. Avec iOS, quelques minutes suffisent à injecter un code dans un téléphone pour permettre une prise de contrôle à distance. Sous Android, le branchement à une prise USB permet de démarrer le mode déverminage via le WIFI, permettant ensuite toutes les fantaisies.
+________________
+Un téléphone emprunté doit être considéré comme compromis.
+________________
+Bac-à-sable
+Plusieurs applications sont présentes dans le terminal. Elles doivent être isolées les unes des autres pour ne pas compromettre la sécurité de l'utilisateur. Une information confidentielle confié à une application n'implique pas forcement que cette information est accessible pour les autres applications.
+Tous les OS mobiles utilise des mécanismes de « bac-à-sable » pour isoler les applications les unes des autres. Une attaque interne entre les applications est alors théoriquement impossible.
+Fichiers
+Contrairement à un OS classique, les fichiers ne peuvent être placé n'importe où. Chaque application possède un répertoire spécifique pour y stoker des fichiers, des propriétés ou des bases de données. Ainsi, lors de la désinstallation d'une application, tous les fichiers associés peuvent supprimés.
+Pour interdire l'accès aux fichiers par les autres applications, plusieurs approches ont été envisagées.
+Android utiliser un utilisateur Linux différent pour chaque application. Ce dernier est indiqué comme propriétaire du répertoire de travail. Sauf demande contraire, c'est le seul qu'y a accès aux fichiers. Cela est contrôlé par le système d'exploitation. Ainsi, le code peut être rédigé dans n'importe quel langage de développement (Java, C, C++, Assembleur), les fichiers sont protégés des accès indésirables. Un handle de fichier peut être envoyé à une autre application, pour lui permettre d'accéder à un fichier privé momentanément.
+Windows Phone interdit l'accès direct aux fichiers pour toutes les applications .NET. Un objet spécifique de l'API permet de gérer les fichiers de l'application. Il n'est pas possible de partager un fichier avec une autre application. Cette approche interdit l'utilisation d'un langage de développement différent de .NET.
+IOS isole les fichiers des applications. Pour permettre le partage de fichier via le menu « Open with... », iOS duplique l'intégralité d'un fichier d'une application vers le contexte d'une autre application. Cela duplique les copies de ce dernier et ne permet plus de contrôler son cycle de vie.
+Android propose en plus un accès à un espace partagé, généralement une carte mémoire de type SD. Toutes les applications peuvent utiliser cet espaces et partager ainsi des données. La carte pouvant être débranché, il est important d'y chiffrer les informations sensibles.
+Windows Phone utilise la carte SD comme une extension de sa mémoire de masse. Les informations sont combinées avec la mémoire de masse standard. La carte SD ne peut être exécuté en dehors du téléphone. Une clef de chiffrement lie la carte SD au téléphone.
+IOS ne permet pas d'utiliser des carte SD.
+Services
+Certains systèmes (Android) permettent aux applications de communiquer via différentes technologies (Invocation d'objets à distances, exposition de sources de données, partages de fichiers, exposition d'écran, ouverture d'URL, etc.), d'autre permettent une communication légère comme l'envoie de message à toutes les applications (Android, iOS). D'autre, au contraire, interdisent la communication d'informations entre les applications (Windows Phone).
+En permettant la communication entre les applications, la surface d'attaque entre applications est plus importante. Il est important d'être vigilant lors de la rédaction des services partagés.
+Une application peut exposer des services à destinations des autres applications. Elle expose des objets distribués, des fournisseurs de données, des événements (Broadcast ou non) ou des fenêtres (Intent associés à une activité sous Android).
+Ces services peuvent être utilisés malicieusement par d'autres applications et doivent être protégés.
+Android
+Sous Android, il existe plusieurs techniques pour communiquer entre applications. Tous ces techniques peuvent recevoir des objets Parcelable. Il s'agit d'une technique pour sérialiser des grappes d'objets Java afin de les envoyer entres différentes applications.
+Les routines pour transformer un objet en flux de byte et l'inverses sont à rédiger par le développeur. Lors de la récupération d'un flux, il n'y a aucune garantie que le flux a été généré correctement. Il est donc important de vérifier la consistance de l'objet produit à partir du flux.
+Par exemple, si un objet propose deux entiers min et max avec min < max. Rien ne garantie après la transformation du flux en objet que l'instance ainsi construite respecte bien cette contrainte. min peut être supérieur à max. Il est donc important de vérifier tous les invariants de l'instance après sa reconstruction.
+Toutes les fenêtres des applications (Activités) d'une application Android sont par défaut disponible aux autres applications. Elles sont identifiées par des filtres d'intentions ou par leurs noms. Une autre application peut ainsi invoquer une activité d'une autre application via la méthode startActivity(). C'est un mécanisme très puissant pour permettre l'intégration des applications dans le téléphone. Cela permet, par exemple, de déclencher un visualiseur d'image, sans avoir aucune idée de qui s'en chargera.
+L'intention déclenchant l'activité peut recevoir des paramètres dans un conteneur d'Extras (primitif, Parcelable ou Serializable). Ces derniers peuvent avoir été construit malicieusement pour exploiter une vulnérabilité de l'application cible, et éventuellement extraire des données confidentielles ou modifier des paramètres de sécurité de l'application.
+Pour éviter d'exposer une activité aux autres applications, il faut ajouter l'attribut android:exported="false". Si l'activité doit pouvoir être invoquée par certaines applications privilégiées, il est alors nécessaire d'imposer un privilège spécifique via l'attribut android:permission.
+De même, une application Android peut exposer des données aux autres applications via un fournisseur de contenues (<provider>). L'attribut  android:exported est à true par défaut, puisque c'est l'objectif de ce composant. S'il ne doit être utilisé que par l'application, ou par plusieurs applications partageant le même processus, il est préférable de le valoriser à false. Un attribut android:permission permet également de contrôle les droits d'accès.
+Dans un scénario ou une URI d'une donnée est livré à une application tierce (cas d'une pièce jointe de type image, à envoyer à une application de visualisation d'images), il peut être nécessaire de vérifier si le privilège a été délégué. Cela se déclare avec l'attribut android:grantUriPermissions lors de la déclaration du fournisseur. Une limitation des URI peut être indiqué à l'aide du marqueur <grant-uri-permission>.
+Un fournisseur de contenu reçoit tous les paramètres nécessaires à la création d'une requête SQL. Ces paramètres doivent être utilisé avec précaution pour ne pas être exposé à une injection SQL, XML, XPATH, LDAP, URL ou autre. Cela permettrait de récupérer des informations confidentielles, confié à une application, à l'aide d'une autre application, sans exiger de privilèges particulier.
+Un <receveur/> est un objet à l'écoute de message destiné à toutes les applications (Broadcast). Ce dernier peut recevoir des messages corrompus. Deux mécanismes de sécurités sont disponibles pour ce composant. Il est possible de vérifier les privilèges de l’émetteur du message et les privilèges du receveur.
+La méthode sendBroadcast() peut recevoir un paramètre avec le privilège exigé par le receveur.
+L'attribut android:permission ou la méthode registerReceiver() peuvent également indiquer un privilège exigé par l'émetteur.
+Depuis la version Ice Cream Sandwich, il est possible d'indiquer un package spécifique pour le message (setPackage()). L'émission du message n'est plus destiné à toute les applications mais à une seule.
+Un <service> est un traitement en tâche de fond. Il a deux vocations :
+* Permettre des traitements alors que l'application n'est pas au premier plan ;
+* Initier la connexion vers des services codés en Java, qui peuvent ainsi être invoqués par d'autres applications.
+Comme pour les composants précédant, il est possible de limiter les risques en utilisant les paramètres  android:exported et  android:permission.
+Lors du lancement ou de l’arrêt d'un service (startService(), stopService() ) des paramètres peuvent être indiqué dans l'Intent. Ces derniers peuvent avoir été corrompu.
+Lors de la demande de connexion vers un objet java, exposé par une autre application via bindService(), un Intent est également envoyé à la méthode onBind(). Il doit être traité avec méfiance.
+Une fois la connexion avec un objet distant établie, toutes les méthodes déclarées dans le fichier de description d'interface (AIDL) peuvent être invoqué. Les paramètres de ces méthodes ne sont pas dignes de confiance et doivent être validés avant d'être utilisés.
+Il est également possible d'offrir un accès à un fichier d'une application (via un dup du fileid par le système[8]), ou depuis la version 4 d'Android, d'ouvrir un pipe de communication entre applications. Ces flux de communication doit être traité avec rigueur.
+IOS
+Ios propose peu de technologie pour permettre aux applications de communiquer entre-elles.
+Il est possible d'envoyer des notifications ou de s'enregistrer sur la présence de notifications (NSNotficationCenter), de réagir à l'ouverture d'une URL spécifiquement formaté[9] (CFBundleURLTypes) ou d'exploiter les communications réseaux[10].
+Depuis la version 4, il est également possible de partager des fichiers entre application. Les applications doivent s'enregistrer pour signaler qu'elles sont capable de traiter certains type de fichiers. Une copie du fichier est effectué par le système, de l'application source vers l'application destinatrices, avec sa clef de sécurité. Ainsi, les applications sont isolées.
+Pour cela, il faut déclarer l'attribut CFBundleDocumentTypes[11] dans le fichier Info.plist.
+Cette approche multiplie les risques, car les fichiers peuvent être présents en plusieurs exemplaires. Une vulnérabilité dans une des applications peut révéler les informations.
+Toutes les données récupérées par ces technologies ne sont pas digne de confiance. Il faut les valider avec rigueur avant de les utiliser dans les applications.
+Windows Phone 7
+Le système de Microsoft ne propose volontairement rien pour permettre la communication entre les applications. Il est absolument nécessaire d'avoir le réseau pour permettre une communication, via un serveur dans les nuages. Cela limite fortement les catégories d'applications qu'il est possible de réaliser avec ce système. Il n'est pas possible d'être en écoute du réseau, d'intégrer de nouveaux réseaux sociaux, de nouveaux annuaires, gestionnaires de comptes, etc.
+Ce choix particulier du système est justifié par le principe suivant : « S'il n'y a pas de traitement en tâche de fond, il n'y a pas de risque de keylogger. ». C'est un principe fondateur de cette version du système.
+Partage des secrets
+Pour éviter que chaque application demande le nom et le mot de passe de l'utilisateur, il est possible de centraliser cette information, sans pour autant la rendre publique. Pour cela, deux approches sont possibles :
+* Exposer un service livrant cette information aux applications présentant un privilège ou une signature particulière ;
+* Propose un fournisseur de compte qui mémorise le nom et le mot de passe ; Il est possible de demander un cookie pour chaque connexion, après validation de l'utilisateur.
+Cette dernière approche est à privilégier, même si elle est plus complexe à implémenter, car elle permet le partage d'identifiant, sans compromettre la sécurité.
+Cela impose d'autoriser une communication entre les applications. Une application joue le rôle de coffre fort. Les autres demandent un cookie de connexion lorsque cela est nécessaire. Android permet cela.
+IOS et Windows Mobiles ne peuvent proposer cela, car ils manquent de technologies pour permettre la communication entre les applications.
+Pour compenser cela, il faut utiliser les approches Oauth, s'appuyant sur un composant WebKit dans chaque application, pour obtenir une token associé à l'application. Ce composant est sous le contrôle de l'application. Elle peut donc très facilement voler le nom et le mot de passe de l'utilisateur.
+Sous Android, en cas de changement de carte SIM ou tous événements sensibles, tous les mots de passes sont effacés. Ainsi, l'utilisateur devra les re-saisir pour que les applications puissent fonctionner à nouveau. Cela protège l'utilisateur d'un vol du terminal.
+Android propose un framework permettant d'ajouter de nouveaux comptes partagés entre les applications, avec la possibilité de synchroniser en tâche de fonds les données associées. Il est fortement recommandé d'utiliser cette technologie pour mémoriser les identifiants des utilisateurs (AccountManager). C'est l'implémentation de OAuth2, qui n'impose pas HTML pour autoriser une application.
+Bien entendu, si le téléphone est rooté ou jailbreaker, il est possible d'accéder à toute ces informations confidentielles.
+Interface utilisateur sécurisé
+Certains écrans sont particulièrement sensibles et doivent être traité avec une approche défensive contre certaines attaques.
+Par exemple, il est possible d'envoyer une alerte surgissante sous Android (Toast) par dessus une activité classique, pour changer le libelle d'un bouton et inciter l'utilisateur à prendre une décision erronée.
+Une application présente un écran demandant à l'utilisateur de cliquer sur un bouton pour valider son achat. Une autre application arrive à détecter lorsque cet écran est présenté, et envoie un toast judicieusement positionner pour modifier le libelle du bouton par « Abandonner l'achat ». L'utilisateur peut cliquer sur le bouton en pensant ne pas acheter le produit, alors qu'en réalité, l'application considère qu'il a accepté.
+Android propose des technologies pour interdire l'action de bouton s'il existe un élément superposé (Voir SecureActivity[12]).
+IOS ne propose pas d'équivalent à Security Interface Framework présent dans Mac OS X. Comme il ne peut y avoir de superposition entre plusieurs écrans venants de plusieurs application, le risque n'est pas présent.
+Windows Phone ne permet pas non plus de mélanger sur le même écran des informations venants de plusieurs applications.
+Développement
+Comme pour toute application, il est important de se prémunir contre différentes attaques, par l'ajout de code spécifique défensif. On retrouve les approches classiques de tous développement :
+* La validation des entrées
+* La protection contre les débordements de tampon ;
+* Contre les conditions de courses ;
+* Contre les accès simultanés aux fichiers.
+Validation des entrées
+Comme pour toute les applications, il ne faut jamais faire confiance aux données venant de l'extérieur de l'application. Ces données peuvent venir du réseau, de l'utilisateur, d'autres applications, d'Intent, de message Broadcast, d'une URL, de scan NFC, etc.
+Elles doivent être filtrées et validées avant d'être utilisées.
+Sans validation, l'application s'expose à des attaques du type :
+* Débordement de tampon ;
+* Vulnérabilité du format des chaînes de caractères  (printf) ;
+* Commande URL ;
+* Injection de code (SQLInjection,...)
+* Ingénierie sociale
+Android est particulièrement sensible à cela, car il propose de nombreuses approches pour communiquer entres les applications. Un secret confié à une application peut être découvert par une autre, en exploitant un des canaux de communication.
+Débordement de tampon
+Les attaques de type débordement de tampon ( buffer overflow ) consiste à fournir des informations plus grandes qu'attendu par le programme pour modifier le flux de traitement de l'application et lui faire exécuter des commandes injectés dans le processus. Les langages C, C++ et Objectif C sont sensible à ces attaques. Java et .Net ne le sont pas directement. Il peut y avoir des vulnérabilités dans les librairies Java ou .Net exploitant du code C/C++.
+Il est donc important de qualifier toutes les données venant de l'extérieur de l'application. Sinon, une autre application ou un pirate placé sur le réseau peut injecter des traitements et voler les secrets confiés à l'application. Certaines apis de manipulations de chaîne de caractères sont connu pour être vulnérable et ne doivent pas être utilisées. Elles sont spécifiques à chaque langage de développement.
+IOS est particulièrement sensible aux débordements de tampon par le choix des langages de développements (C et Objective-C). Java ou .Net présentent moins de risques, car le code est contrôlé. Le code natif sous Android est également sensible à ces attaques.
+Le risque est d'avoir installer une application anodine qui exploite un canal de communication vers une autre application présente dans le téléphone pour y injecter du code, et y extraire tous les secrets.
+Race condition
+A chaque fois qu'une séquence d'opération à un impact sur le résultat final, il y a potentiellement une vulnérabilité de « condition de course » (Race condition).
+Par exemple, si deux processus (du même programme ou de plusieurs programmes) partages la même donnée globale, il est possible qu'un processus interfère avec un autre, ou qu'un attaquant altère la variable après qu'un processus l'ait valorisé, mais avant que le deuxième la consulte.
+Les gestionnaires de signaux peuvent également être victime de cette vulnérabilité.
+Pour se protéger de cela, il faut utiliser des mécanismes de verrou pour prévenir les utilisations simultanées des données partagées.
+Android offre la possibilité d'invoquer un service d'une autre application. Chaque invocation est exécuté dans un thread différent. Il est donc possible d'être victime d'une condition de course via la publication de service.
+Par construction, IOS et Windows Phone ne semblent pas trop exposé à ces attaques. En effet, il n'est pas possible d'avoir des traitements en tâche de fond.
+Opération sur les fichiers non sécurisé
+Les opérations sur les fichiers sont une source majeure de vulnérabilité. Dans certaines situations, ouvrir ou écrire sur un fichier de façon non sécurisé permet à un attaquant de créer des conditions de courses. Souvent, cela permet la lecture d'informations confidentielles, de prendre le contrôle d'une application ou du système ou de provoquer un déni de service.
+Les fichiers utilisés par les applications mobiles sont limités à chaque application. Étant isolés, il n'y pas de risque spécifique à traiter.
+Par contre certains fichiers sont volontairement partagés avec les autres applications doivent être traité avec rigueurs[13]. C'est le cas des fichiers créé avec les droits MODE_WORLD_READABLE et/ou MODE_WORLD_WRITEABLE ou des fichiers utilisant un stockage externe comme la carte SD.
+Android est sensible à ces attaques. IOS et Windows phone ne le sont pas, sauf pour les fichiers « médias ».
+Traces
+Pendant les phases de développement, les développeurs ont besoins d'avoir des traces des différents traitements effectués.
+Sous Android, ces traces peuvent être accédées par des applications ayant le privilège READ_LOGS ou par un autre téléphone connecté en USB[14]. Elles peuvent révéler des informations confidentielles, confiés à l'application, comme les identifiants d'authentification, les appels entrants ou sortants, des e-mails, etc.
+Il ne faut pas donner d'informations sensibles dans les traces. Un ou plusieurs drapeaux doivent permettre de désactiver toutes les traces lors de la mise en production. Il faut mètre un place une procédure garantissant la désactivation des traces en production.
+if (D) Log.d(TAG,"message"); //Java
+if (D && console) console.log("message") ; // Javascript
+if (D)  NSLog(@"message"); // Objective C
+
+
+iOS propose trois mécanismes de logs :
+* NSLog
+* Utilisation de stderr
+* system log
+#ifdef Debug 
+NSLog(@"message");
+fprintf("message");
+#endif
+Sous Windows Phone 7 :
+#ifdef Debug 
+System.Diagnostics.Debug.WriteLine ("Debug Message Here "); 
+#endif
+Détection d'attaques
+Plusieurs stratégies permettent d'identifier une utilisation inhabituelle de l'application. Cela permet plusieurs stratégies pour freiner l'attaquant :
+* Modifier le comportement de l'application ;
+* Effacer ou modifier des données ;
+* Déduire les clefs de chiffrement ;
+* signaler en douce au serveur de l'entreprise, pour invalider le compte et prendre toute les mesures nécessaires.
+Android utilise un approche équivalente lors du changement de la carte SIM. Tous les mots de passes associés aux comptes sont effacées.
+Déverminage
+Un débogueur peut être connecté à l'application. Cela permet à une autre application de contrôler tous le flux de traitement, d'injecter des traitements complémentaires, de détourner certaines vérifications ou d'avoir accès à toutes les données manipulées par l'application.
+Sous Android, il est important d'ajouter l'attribut android:debuggable="false" au marqueur <application/>.
+Cela peut être vérifié lors de l'exécution par :
+boolean isDebuggable = (0 != (getApplcationInfo().flags &= ApplicationInfo.FLAG_DEBUGGABLE));
+
+
+Il est également possible de le vérifier lors de l'exécution :
+boolean isDebuggable = Debug.isDebuggerConnected();
+
+
+Sous iOS, une petite fonction C permet également de le détecter.
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#include <string.h>
+
+static int check_debugger() __attribute__((always_inline)) ;
+int check_debugger()
+{
+ size_t size=sizeof(struct kinfo_proc) ;
+ struct kinfo_proc info ;
+ int ret, name[4] ;
+ memset(&info,0,sizeof(struct kinfo_proc)) ;
+ name[0]=CTL_KERN ;
+ name[1]=KERN_PROC ;
+ name{2]=KERN_PROC_PID ;
+ name[3]=getpid() ;
+ if (ret=(sysctl(name,4,&info,&size,NULL,0)))
+ {
+   return ret ;
+ }
+ return (info.kp_proc.p_flag & P_TRACED) ? 1 : 0 ;
+}
+Une autre approche consister à interdire le branchement du débuggeur.
+ptrace(PT_DENY_ATTACH,0,0,0) ;
+Installation par le market
+Sous Android, il est possible de vérifier si l'application a bien été installé par le market de Google.
+if ("com.google.android.feedback".equals(
+  getPackageManager().getInstallerPackageName(getPackageName())))
+{
+    // Installed from the Android Market
+    return true;
+}
+L'approche par l'utilisation de la réflexion java est plus difficile à identifier par des outils automatiques.
+Un pirate peut facilement contourner cela avec la commande :
+adb install -i com.google.android.feedback MonApplication.apk
+Détection de l'émulateur
+String android_id = Secure.getString(getContentResolver(), Secure.ANDROID_ID);
+if (android_id == null)
+{
+  // This was run inside an emulator, don't let the user continue!
+}
+Un pirate peut facilement contourner ce test ainsi :
+adb shell
+# cd /data/data/com.android.providers.settings/databases
+# sqlite3 settings.db
+SQLite version 3.6.22
+Enter ".help" for instructions
+Enter SQL statements terminated with a ";"
+sqlite> insert into secure ('name', 'value' ) values ('android_id','deadbeef4badcafe');
+sqlite> .exit
+Intégrité de l'application
+L'application peut vérifié son intégrité, pour s'assurer qu'elle n'a pas été modifiée.
+Sous Android, cela peut s'effectuer par la vérification du signataire de l'application. La signature est vérifié par Android lors du chargement de l'application.
+static final byte[] ORIGINAL_SIGNATURE=
+{(byte)48,(byte)-127,...};
+
+
+public static boolean checkSigner(Context context)
+{
+  JarFile jarFile = null;
+  try
+  {
+    byte[] readBuffer=new byte[8196];
+    String packageCodePath = context.getPackageCodePath();
+    jarFile = new JarFile(packageCodePath);
+    JarEntry je=jarFile.getJarEntry("classes.dex");
+    // We must read the stream for the JarEntry to retrieve
+    // its certificates.
+    InputStream is = jarFile.getInputStream(je);
+    while (is.read(readBuffer, 0, readBuffer.length) != -1) ;
+    is.close();
+    Certificate[] cert=je.getCertificates();
+    jar.close() ;
+    if (cert.length!=1)
+      return false;
+    byte[] pubKey=cert[0].getPublicKey().getEncoded();
+    return (Arrays.equals(ORIGINAL_SIGNATURE, pubKey));
+  }
+  catch (IOException e)
+  {
+  }
+  return false;
+}
+Complexifier le désassemblage
+Des outils automatiques sont capables d'extraire le code d'une application, de détecter les verrous classiques, de les désactiver et de reconstruire l'application.
+Par exemple, sous Android, l'outil AntiLVL[15] supprime automatiquement, dans la plupart des cas, les vérifications de licence des applications.
+Pour résister à ce type d'outils, il faut camoufler le code de protection à l'aide d'introspection, en utilisant des chaînes de caractères chiffrées, des tests subtiles, des ClassLoaders de déchiffrement, etc. Ainsi, l'attaquant devra analyser réellement le code.
+Pour complexifier sa tâche, il faut utiliser des outils d'obfuscation comme l'outil intégré dans le SDK d'Android : Proguard[16].
+Sous iOS, des outils comme class-dump-z[17] permettent d'analyser un programme Objective-C. Pour s'en prémunir, Apple chiffre l'application avant de la signer. Un loader spécifique est ajouté pour déchiffrer l'application avant de la charger en mémoire.
+Avec un téléphone débloqué et un dévermineur, il est facile d'obtenir les fichiers déchiffrés. Il faut d'abord trouver l'exécutable dont le répertoire change à chaque installation. En plaçant un point d’arrêt sur la fonction doModInitFunctions, le programme s'interrompt juste avant de commencer, mais juste après avoir été déchiffré.
+Il faut alors utiliser abusivement les méthodes inline pour diluer et multiplier le code sensible.
+Des compagnies proposent des outils de protection plus avancé comme ARXAN[18].
+Sécurité côté serveur
+Les capacités limitées des terminaux mobiles entraînent que les applications sont rarement autonomes. Elles ont besoin d'accéder à un serveur (back-end) pour récupérer des données, partager des informations, effectuer des traitements lourds, etc.
+Les applications mobiles sont généralement découpées en deux parties. L'une est présente dans le téléphone, l'autre est présente sur le serveur. Ce dernier peut publier des pages pour l'application mobile, ou des services.
+Isolation du domaine mobile
+Une vulnérabilité sur la partie du site dédiée aux mobiles peut affaiblir l'intégralité du site Web. Il est préférable d'utiliser un nom de domaine différent pour les deux usages. Par exemple : www.mon-site.org et m.mon-site.org.
+Service Web
+Le serveur peut proposer plusieurs types de services :
+* Des pages Web spécifiquement conçu pour une utilisation mobile (HTML5) ;
+* Des services Web retournant des données dans différents formats (JSON, XML, texte) ;
+* Des services utilisant des protocoles divers (SMTP, IMAP, POP3, LDAP, etc.) ou propriétaires.
+Pour éviter la manipulation des flux dans un sens comme dans l'autre, il est important d'utiliser une connexion sécurisée lors de l'invocation d'un service Web.
+Cela a un impact sur les performances car le réseau en mobilité est très volatile est présente une latence importante. L'ouverture d'une connexion TLS/SSL nécessaire plusieurs échanges avant la négociation d'une clef de session. Après une déconnexion intempestive, il est nécessaire de rouvrir la connexion. Le serveur doit avoir un cache TLS/SSL correctement valorisé pour permettre de recycler les clefs précédemment négociées.
+Pour éviter de multiplier les ouvertures de sockets, il est préférable d'utiliser le protocole HTTP 1.1 qui est capable de sérialiser plusieurs requêtes sur le même flux. Mais, cela peut avoir un impact si les premières requêtes sont longues à être traité par le serveur. Toutes les requêtes en attentes seront impactés. Le nombre de requête simultanée, et le recyclage des connexions en HTTP 1.1 est très variable d'un terminal à un autre et d'une version d'OS à une autre. Il est important d'utiliser des APIs HTTP permettant d'utiliser cette version de protocole.
+Pour réduire le trafic réseau, il est indispensable d'utiliser la compression gzip pour toutes les requêtes. Le temps de décompression est sans commune mesure avec l'économie réalisée par la communication réseau.
+Lors de l'utilisation de WebKit, c'est le composant qui se charge des requêtes. Il peut être judicieux d'ajouter quelques en-têtes pour optimiser le trafic Ajax (Accept-Encoding, ETAG) et de les respecter coté serveur.
+Les services Webs exposés pour les applications mobiles sont également accessible à l'ensemble de la planète. Il est impossible de limiter l'accès aux APIs aux seules applications signées par le domaine. En effet, rien ne différencie un flux réseau d'un autre flux réseau. Un pirate peut donc exploiter tous les services publiés pour une application, pour les utiliser dans une autre.
+Comme tous traitements publiés par un serveur, il est nécessaire d'appliquer les bonnes pratiques d'un développement sécurisé coté serveur (validation de tous les paramètres, protection contre l'exploitation d'une authentification faible, protection contre l'exploitation d'identifiant d'objets, etc.) Nous vous invitons à consulter la littérature très fournis sur le développement de site Web.
+Isolation des API serveurs
+Les serveurs présentent des API dont on souhaite limiter l'usage à certaines applications. Un identifiant est souvent généré par le développeur pour représenter son application par rapport aux autres. Ainsi, le serveur peut révoquer une application spécifique, sans impacter les autres applications.
+L'identifiant est facilement récupérable par un développeur malveillant. En effet, il doit être présent en dur dans chaque application. Une analyse des sources d'un projet ouvert, ou une analyse du composant logiciel permet rapidement de récupérer l'identifiant pour rédiger une autre application. L'identifiant permet seulement de révoquer temporairement une application malveillante.
+Éventuellement, l'identifiant peut être enrichie d'une autorisation accordée par l'utilisateur lors de l'utilisation de l'API (OAuth[19] ou OAuth2[20]). Ce dernier doit être mémorisé sur le terminal avec les mêmes sécurités que pour un mot de passe. L'utilisateur peut alors révoquer une application se révélant malveillante ou qu'il n'utilise plus.
+Cette approche ne protège pas l'utilisateur contre une fausse application au-quelle il accorde sa confiance.
+Infrastructure de test
+Pendant la phase de test des applications mobiles, il est nécessaire d'exposer les services soit via une connexion Wi-Fi, soit via une connexion 3G afin qu'ils soient accessibles par les terminaux utilisés pour les tests.
+Si l'on veut sécuriser l'accès à ces services, il est nécessaire de sécuriser ces deux types de connexion :
+* La connexion Wi-Fi doit être sécurisée avec éventuellement l'utilisation d'un certificat numérique client pour chaque terminal servant aux tests.
+* Pour la connexion 3G, on peut utiliser un VPN en paramétrant les terminaux en conséquence.
+Ainsi, les services en cours de développement ne sont pas exposés sur Internet.
+Gestion de parc
+Les trois OS proposent des technologies pour gérer un parc de terminaux. Microsoft propose d'utiliser Exchange, Apple propose « Apple configurator[21] », mais seul Android permet de créer une concurrence sur les solutions de gestion de parc, car le système ne propose pas de solution mais un framework et des API. Ainsi, il est possible de rédiger une application de gestion de parc sur mesure, ou de comparer les différentes solutions proposés par le marché. Sous iOS ou Windows Phone, des services ne sont pas proposés par ces technologies, et impossible d'y échapper tant que Apple ou Microsoft ne les fait pas évoluer .
+A ce niveau, Android est plus souple et potentiellement plus sécurisé que les autres approches.
+Nouvelle vulnérabilité induite par les applications mobiles
+En dehors de la mobilité, la sécurité est de la responsabilité du navigateur. Les utilisateurs lui font confiance, même s'il est possible qu'un virus injecte du code dans le navigateur. C'est ce dernier qui garantie l'accès aux sites et vérifie la validité des certificats numériques.
+La situation est toute autre en mobilité. En effet, des applications signées sont publiées dans des places de marchés, mais rien ne permet d'associer le signataire des applications avec les sites qu'elles consomment.
+Rien n'interdit à un développeur de proposer une nouvelle application pour accéder aux informations bancaires, en vampirisant le site Web actuel. Au passage, l'application peut mémoriser les identifiants sur un site complice. La banque n'a pas besoin d'avoir une application spécifique pour que l'attaque soit valide. Au contraire. S'il n'y a pas d'application concurrente, l'attaque est plus efficace.
+Il est donc nécessaire d'effectuer une veille active sur les différentes place de marchés pour identifier les applications exploitants vos services.
+Une évolution technique est nécessaire dans tous ces OS pour renforcer la sécurité sur ce point.
+Une piste possible pour protéger l'utilisateur de ce type particulier d'attaque, est la suivante :
+* Affiner les privilèges des applications pour qu'elles puissent informer des sites exactes auxquelles elles souhaitent accéder.
+* Publier sur le serveur DNS, le certificat numérique utilisé pour signer les applications. Le système d'exploitation du mobile doit alors être modifié pour n’autoriser les connexions vers des sites, que si la signature de l'application est conforme.
+Ces approches permettent de protéger l'utilisateur attentif qui refusera d'installer une application qui demande un accès complet à internet, alors que cela ne semble pas nécessaire.
+Cela ne protège pas contre une application utilisant un autre écosystème, n'implémentant pas ces modifications.
+Synthèse
+Suivant les plate-formes de développement, les technologies proposées sont différentes. Certains principes sont applicables à toute les plates-formes :
+* Gardez les informations confidentielles en mémoire ;
+* Seul le cookie peut être sauvé sur disque le temps de sa durée de vie ;
+* Vérifiez toutes les données venant de l'extérieur de l'application (Formulaire, réponse réseau, invocation par d'autres processus) ;
+* Utiliser des verrous pour limiter les « conditions de courses » ;
+* Utiliser systématiquement une connexion chiffrée ;
+* Vérifiez la validité des certificats numériques exposés par les serveurs ;
+* Chiffrez les données confidentielles avec une clef privée mémorisées dans un conteneur sécurisé ;
+* Effacer correctement les données sensibles ;
+* N'utiliser que le minimum de fonctionnalité d'un composant WebKit ;
+* Demander le minimum de privilèges possibles ;
+* Limiter au maximum l'exposition des services de l'application (android:exported="false") ;
+* Imposer des privilèges lors de l'exposition des services (pour l’émetteur et pour le receveur) ;
+* Utiliser la gestion des comptes pour mémoriser les secrets (AccountProvider) ;
+Conclusions
+Cette étude comparée des différents systèmes est très révélatrice des points forts et des faiblesses de chaque système.
+Il apparaît clairement que la paranoïa de Microsoft (on se demande pourquoi) a généré un système d'exploitation qui est très fortement limité. Il n'y a aucun moyen de communiquer entre les applications sans réseau. C'est sympathique dans le métro... Aucun service ne peut tourner en tâche de fond. N'imaginez pas pouvoir utiliser votre téléphone comme fournisseur d'alerte radar pendant que vous consultez vous mails.
+L'approche déclarative des privilèges est équivalente à ce que propose Android, mais fortement limité. Il y a de nombreuses applications que seul Microsoft peut rédiger. Impossible de s'intégrer dans le système.
+IOS a privilégié l'ergonomie et l'expérience utilisateur. Le modèle de sécurité est donc limité au chiffrement des fichiers. Mais l'implémentation n'est pas satisfaisante. De plus en plus, Apple se rapproche du modèle d'Android. Des conforts ergonomique entraîne parfois des failles, comme la sauvegarde sur disque des copies des écrans des différentes applications. La communication entre les applications est fortement limités. Au fur et à mesure, Apple ajoute des services comme le « open with... ». Mais comme les fondamentaux de sécurités sont maintenant difficile à modifier, cela se traduit par une copie des mêmes fichiers entres les applications. Tous en pan d'application ne peut être proposé avec iOS pour le moment. Les difficultés vont allées croissantes lorsqu'il faudra porter les applications pour différentes versions de l'OS (iPhone et iPad n'utilisent pas le même OS), avec des résolutions variables (les prochaines versions des terminaux).
+IOS intègre maintenant de nombreuses techniques pour renforcer la sécurité. Il faut franchir de nombreuses étapes pour réussir à laiser un accès persistant dans l'OS. Même un compte root n'a pas accès aux privilèges du noyau[22].
+Android est le système le plus riche et le plus souple. Les nombreuses techniques de communications entre les processus, la possibilité de partager des données, des fichiers voir des pipes, en font un système qui peut accueillir pratiquement toutes les applications imaginables. Cela a complexifié les applications aux débuts, mais les choix s'avère particulièrement pertinent avec le temps. Il n'y a pas de version différente des applications suivant les terminaux, des téléphones en passant par les tablettes et les téléviseurs.
+Le développement sécurisé d'applications mobiles est plus complexes que pour les applications Webs classiques. Les menaces sont plus nombreuses et plus difficiles à contrer. Il est important d'utiliser abondamment le chiffrement, et d'être paranoïaque si l'application manipule des données sensibles.
+Mais, il faut savoir que le vol d'un téléphone correspond généralement à la compromission totale des données qu'il possède. Il est prudent de modifier rapidement tous les mots de passes.
+Différents projets se proposes d'améliorer la sécurité des OS. Par exemple, le projet Guardian[23] propose un ensemble d'outil pour Android.
+L'actualité commence à faire l'écho d'application malveillante[24]. Soyez vigilant et rigoureux avant de publier votre application.
+Et surtout, surtout, ne rootez pas votre téléphone d'usage courant.
+Philippe PRADOS article@prados.fr
+Architecte Senior Smart Mobility - AtoS
+________________
+[1]http://www.schuba.fh-aachen.de/papers/11-ICDF2C.pdf
+[2]http://support.apple.com/kb/HT1424?viewlocale=fr_FR&locale=fr_FR
+[3]http://sqlite.org/lang_vacuum.html
+[4]https://guardianproject.info/code/sqlcipher/
+[5]http://developer.android.com/reference/android/widget/AutoCompleteTextView.html
+[6]http://en.wikipedia.org/wiki/Cold_boot_attack
+[7]https://market.android.com/details?id=com.avast.android.mobilesecurity
+[8]http://developer.android.com/reference/android/os/Parcel.html#writeFileDescriptor(java.io.FileDescriptor)
+[9]https://developer.apple.com/library/ios/#documentation/iPhone/Conceptual/iPhoneOSProgrammingGuide/AdvancedAppTricks/AdvancedAppTricks.html#//apple_ref/doc/uid/TP40007072-CH7-SW18
+[10]https://developer.apple.com/library/ios/#documentation/Networking/Conceptual/NSNetServiceProgGuide/Articles/OperationsonNetworkServices.html
+[11]https://developer.apple.com/library/ios/#documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html#//apple_ref/doc/uid/TP40009249
+[12]http://developer.android.com/resources/samples/training/device-management-policy/src/com/example/training/deviceadmin/SecureActivity.html
+[13]http://www.ibm.com/developerworks/library/l-sprace/index.html#N1010E
+[14]http://developer.android.com/resources/samples/USB/AdbTest/index.html
+[15]http://androidcracking.blogspot.com/p/antilvl.html
+[16]http://developer.android.com/guide/developing/tools/proguard.html
+[17]http://code.google.com/p/networkpx/wiki/class_dump_z
+[18]http://www.arxan.com/
+[19]http://oauth.net/
+[20]http://wiki.oauth.net/w/page/25236487/OAuth%202
+[21]http://itunes.apple.com/fr/app/apple-configurator/id434433123?mt=12
+[22]http://www.macgeneration.com/unes/voir/131112/securite-ios-a-pris-une-grosse-avance-sur-android
+[23]https://guardianproject.info/
+[24]http://android.smartphonefrance.info/actu.asp?ID=2321

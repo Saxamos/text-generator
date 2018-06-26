@@ -1,0 +1,222 @@
+﻿Android :Privilèges optionnels
+  
+
+Savez-vous qu'il est possible de bénéficier de privilèges supplémentaires à la discrétion de l'utilisateur ? Nous avons trouvé une façon original de permettre à l'utilisateur d'activer ou non les privilèges, sans hack du téléphone.
+Par Philippe PRADOS - 2012
+www.prados.fr
+J'étais présent aux « Hack in Paris », dans une salle de conférence de Disneyland Paris. C'est souvent l'occasion de se poser et de réfléchir. Je pensais aux privilèges qui sont accordés aux applications, et particulièrement au privilège qui fait voir rouge l'utilisateur : l'envoi de SMS.
+  
+
+Je me suis dis que ce dernier peut entraîner l'utilisateur à refuser d'installer l'application. C'est donc pratiquement un privilège interdit pour toutes applications.
+Pourtant, l'application sur laquelle je travail peut utiliser l'envoi de SMS dans des conditions tous à fait légitime, pour par exemple, permettre l'envoi des paramètres de connexions d'un Android à un autre, afin d'initier une communication en peer-to-peer. C'est une facilité comme une autre, pas un service indispensable.
+Comment faire pour offrir cette option, sans que l'utilisateur rejette l'application ? Android ne propose pas de modèle de sécurité à la carte. L'utilisateur doit accepter tous les privilèges exigés par l'application ou la refuser intégralement.
+N'y a-t'il pas une autre solution ?
+Connaissant parfaitement les rouages d'Android sur la sécurité, j'ai alors imaginé une solution originale. De retour à la maison, 10 minutes m'ont permises de confirmer mes prédictions. C'est le fruit de ces travaux que je me propose de partager avec vous.
+Mais avant toute chose, il faut comprendre comment tous cela fonctionne. Peux-être serez-vous capable d'imaginer la solution avant la fin de l'article ?
+À vous méninge ;-)
+Les privilèges sous Android
+Android propose une approche de la sécurité basé sur la déclaration de privilèges. C'est une liste de fonctionnalités que l'application souhaite pouvoir exécuter. Cette liste est organisée et présentée à l'utilisateur avant l'installation de l'application. Ainsi, en théorie, l'utilisateur est responsable des risques qu'il prend. En pratique, il clique généralement sur « installer », sans autre forme de procès.
+Certains utilisateurs sont plus sensible à la sécurité, et regarde précisément les privilèges indiqués. Des applications tierces peuvent également signaler des combinaisons de privilèges suspicieux. Typiquement, la combinaisons des privilèges « localisation » et « accès internet » peuvent faire réagir.
+Le problème de cette approche est qu'il est difficile de savoir si les privilèges sont justifiés avant de connaître l'application ! La description est souvent fonctionnelle et non technique ! Comment savoir s'il est légitime de demander l'envoie de SMS dans une application de « Chat » sur réseaux sociaux ? Est-ce que l'application propose un moyen pour communiquer quand même avec une personne non connecté ?
+Il existe des approches permettant de supprimer certains privilèges exigés par l'application. Par exemple, une entreprise peut souhaiter, pour sa flotte, la désactivation complète de la caméra. Pour pouvoir faire cela, le téléphone doit avoir été rooté. Root = augmenter les risques de sécurités. Glups.
+De plus, les applications ne s'attendent pas à ce que certains privilèges soient rejetées. Elles plantent alors lamentablement.
+Une approche peut consister à simuler le fonctionnement normal pour l'application. Par exemple, fournir une liste de contacts vide ou un écran noir à la place de la caméra. Mais, cette approche est complexe et impossible globalement. En effet, une des forces d'Android par rapport aux autres plate-formes, est qu'il est possible d'ajouter de nouveaux privilèges. Ainsi, une application peut mémoriser les informations de comptes de l'utilisateur, et ne souhaiter les partager qu'avec les applications possédant un privilège particulier comme « accéder aux informations de compte de ACMA ».
+La simulation des comportements normaux est alors impossible, car impossible de simuler les privilèges inconnus.
+Il faudrait un modèle plus fin ou plus sélectif : indiquer la liste des privilèges nécessaires à l'application, avec certains obligatoires et d'autres optionnels. L'utilisateur peut alors intervenir sur les privilèges optionnels pour les activer ou non. Android ne propose pas encore ce modèle.
+C'est exactement ce que nous nous proposons de faire. Permettre d'ajouter dynamiquement certains privilèges. L'approche ne sera pas aussi élégante qu'une approche intégrée, mais elle fonctionne.
+Vérification des privilèges
+Comment Android fait pour vérifier les privilèges ? Qu'est-ce qui garantie qu'une application ne puisse pas contourner les vérifications pour attaquer la caméra, le SMS, etc ?
+En fait, tous les composants hardware ne sont pas accessibles aux applications. Il n'est donc pas possible d’accéder à ces composants directement.
+Pourtant, les applications arrivent à le faire si elles ont les bon privilèges ? En fait non. Les applications n’accèdent jamais directement à ces composants. Les applications invoquent une autre application via un mécanisme d'invocation de méthode entre processus (AIDL), pour demander un traitement spécifique sur un composant comme l'envoie d'un SMS. C'est cette autre application qui possède les droits pour accéder aux composants électroniques et aux drivers Linux.
+Le framework est découpé en une librairie utilisée par toute les applications (android.jar), et une application system_app qui porte toutes les informations sur les applications et expose des services sensibles.
+Lorsqu'une application demande à invoquer un service critique, system_app peut vérifier les privilèges de l'application appelante. En fait, system_app n'est pas une application particulière. Toute les applications invoquées via le mécanisme d'AIDL peuvent demander les privilèges de l'appelant. En effet, le module binder d'Android, en charge de la communication entre les processus, injecte le PID et le GID du processus appelant. Ces informations sont injectées par le driver, donc au niveau Kernel. Elles ne sont pas manipulable ou « spoofable ».
+Le composant invoqué peut alors demander si le processus appelant possède bien le privilège nécessaire au service demandé. Si ce n'est pas le cas, il rejette le service en envoyant une exception.
+Notez-bien que j'ai déjà mentionné le mot clefs permettant de s'approcher de la solution.
+Les processus
+Les applications Androids sont exécutées dans des processus différents. Ainsi, le framework peut décider de tuer un processus s'il est nécessaire de libérer des ressources pour d'autres applications. Comme je l'ai déjà mentionné dans d'autres articles, ce découpage est arbitraire. Il n'est pas structurant pour le framework Android. C'est, à mon avis, une innovation majeur de ce système. En effet, il est possible de lancer l'intégralité du framework Android dans un seul processus. Dans ce cas, les applications sont isolées les unes des autres par des ClassLoaders différents.
+Le mécanisme de communication entre processus sait gérer cela. Il utilise un raccourci technique pour rester dans le même processus sans passer par le noyau, lorsque deux applications différentes sont dans le même processus et communiquent entres elles. Ainsi, en démarrant le framework Android dans une Dalvik, avec le mode mono-processus, il n'est pas nécessaire d'avoir le module Binder dans le noyau Linux. Toutes les communication entres les applications ou entre les applications et system_app s'effectuent dans le même processus, la Dalvik courante.
+Lors de l'installation d'une application, Android crée un utilisateur Linux spécifique, associé à l'application. Ainsi, il est possible de construire également un répertoire de travail pour l'application, dont les privilèges d'accès aux fichiers sont limités à l'utilisateur correspondant.
+Il est possible de contrôler cela via le fichier AndroidManifest.xml. Pour permettre à deux applications différentes de partager le même processus, il faut réunir deux conditions : les applications doivent partager le même utilisateur Linux, et indiquer le même nom de processus. En effet, comment imaginer deux applications différentes, utilisant deux utilisateurs Linux différents, mais partageant le même processus ? C'est impossible.
+Pour permettre à deux applications de partager le même utilisateur, il faut l'indiquer dans le marqueur <manifest/> du fichier AndroidManifest.xml :
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="fr.prados.extendpriviles.sms"
+    android:sharedUserId="fr.prados.extendprivileges"
+    android:versionCode="1"
+    android:versionName="1.0" >
+Le nom de l'utilisateur est symbolique. Pour éviter les ambiguïté, il est préférable d'utiliser une notation package. Plusieurs applications peuvent indiquer le même nom, mais pour cela, elles doivent également partager la même signature numérique ! En effet, sinon, il serait facile de s'injecter dans le processus de n'importe quelle application !
+Partager le même utilisateur n'indique pas que l'on partage le même processus. Cela permet à plusieurs applications de partager des fichiers par exemples, puisque les droits d'accès sont accordés à l'utilisateur.
+La première condition étant remplie, nous pouvons nous atteler à la suivante : Indiquer que l'on souhaite partager le même processus.  Cela s'effectue très simplement, via le marqueur <application/>.
+   <application
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:process="fr.prados.extendprivileges"
+        >
+Le nom du processus est également symbolique. Il doit être le même dans les différentes applications.
+L'un des avantage de ce partage est de réduire la consommation mémoire. En effet, une seule Dalvik et un seul espace mémoire est partagé entre plusieurs applications du même auteur. C'est indispensable pour la réalisation de plugin ou d'extension à votre application.
+Bon, nous avons tous les ingrédient sous la main pour pouvoir ajouter dynamiquement un privilège à une application. Vous avez trouvé comment faire ? Quel est le mot clef nous permettant de trouver une solution ?
+Privilèges optionnels
+Le mots clefs est «processus » ! Rappelez-vous, les privilèges sont validées en vérifiant les privilèges du processus appelant et non les privilèges de l'application ! D'autre part, il est possible d'avoir plusieurs applications partageant le même processus.
+Bingo. Les fils se touches. L'étincelle allume la petite lampe au dessus de la tête.
+Que se passe-t'il si une application possède certains privilèges, et qu'une autre application ajoute de nouveaux privilèges tout en partageant le processus ?
+Vu le mécanisme mis en place, le processus possède l'union des privilèges de chaque application ! C'est ce que nous avons rapidement vérifié. Et c'est parfaitement logique. system_app maintient la liste des privilèges associés à chaque processus et non à chaque application.
+Nous pouvons alors écrire une application qui tolère l'absence d'un privilège, puis une autre application ayant pour seule et unique fonction d'ajouter le privilège qui nous manque à notre application.
+Mise en pratique
+Pour illustrer cela, nous allons proposer une petite application toute bête, proposant un champ de saisie pour saisir un numéro de téléphone, et un bouton pour envoyer un SMS. Le bouton ne sera actif que si le privilège SEND_SMS est disponible. L'application ne possède pas, par défaut, ce privilège.
+  
+
+Le fichier AndroidManifest.xml est tous simple.
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="fr.prados.extendprivileges"
+    android:sharedUserId="fr.prados.extendprivileges"
+    android:versionCode="1"
+    android:versionName="1.0" >
+
+
+    <uses-sdk android:minSdkVersion="7" />
+
+
+    <application
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:process="fr.prados.extendprivileges"
+        >
+        <activity
+            android:name=".OptionalPrivilegedActivity"
+            android:label="@string/app_name" >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+
+</manifest>
+La seule particularité est de posséder les attributs android:sharedUserId et android:process. Ces derniers ne sont valide qu'avec les applications partageant la même signature numérique.
+Dans le code, la première chose à faire est de vérifier que l'application, ou plutôt le processus, possède le privilège SEND_SMS.
+@Override
+protected void onResume()
+{
+        super.onResume();
+        // Check if I have the privilege to send SMS
+        if (checkPermission(Manifest.permission.SEND_SMS,
+                Process.myPid(),
+                Process.myUid())
+                ==PackageManager.PERMISSION_DENIED)
+        {
+                mSendSms.setEnabled(false);
+                mStatus.setText(R.string.no_privilege);
+        }
+        else
+                mStatus.setText("");
+}
+Suivant les cas, le bouton est activé ou non. Super.
+Mais comment ajouter le privilège qui nous manque ? Si on se contente de suivre la document d'Android, ce n'est pas possible.
+Mais maintenant que vous êtes une tortue Ninja, vous savez qu'il faut créer une autre application qui va partager le processus. Le plus amusant est que cette autre application ne possède aucun code ! Saviez-vous que cela est parfaitement géré par Android ? Il existe un attribut dans le marqueur <application/> permettant d'indiquer cela !
+Notre nouvelle application est essentiellement constituée d'un fichier AndroidManifest.xml. C'est l'application Android la plus petite que vous serez amené à rédiger ! Voici toute la magie de notre approche.
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="fr.prados.extendpriviles.sms"
+    android:sharedUserId="fr.prados.extendprivileges"
+    android:versionCode="1"
+    android:versionName="1.0" >
+
+
+    <uses-sdk android:minSdkVersion="7" />
+    <uses-permission android:name="android.permission.SEND_SMS"/>
+
+
+    <application
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:process="fr.prados.extendprivileges"
+        android:hasCode="false"
+        />
+
+
+</manifest>
+Notez plusieurs choses dans ce fichier. Le marqueur <application/> est fermé ! Il ne contient rien. C'est étrange n'est-ce pas ? Comme nous n'avons aucune classe (le répertoire src est vide), nous indiquons que l'application est vide via l'attribut android:hasCode="false".
+Il possède également un attribut android:process dont la valeur correspond à la valeur de l'autre application. Il possède également un attribut android:sharedUserId dans le marqueur <manifest/>.
+Et c'est maintenant que la magie opère : nous ajoutons simplement le privilège SEND_SMS.
+Juste pour pouvoir être présent dans le market, nous ajoutons un nom et une icône. Ce n'est pas nécessaire techniquement. Le nom que nous avons choisi est le suivant : « ExtendPrivileges: Add SEND_SMS ». C'est super technique et absolument pas « User friendly », mais pour vous, lecteur, c'est plus clair.
+Cette application, compactée et signée ne fait que 3,9 Ko ! L'application la plus petite du « play store » !
+Tous les sources sont présent ici : http://code.google.com/p/articles-glmf/
+Bon, comment tester cela ? Commencez par installer l'application ExtendsPrivileges. Le bouton d'envoi de SMS est désactivé. En effet, l'application ne possède pas les droits.
+Puis, ajoutez l'application ExtendsPrivileges-sms. Il ne se passe rien. En effet, il n'y a pas de code. Relancez l'application ExtendsPrivilèges, le bouton est actif ! C'est magique ! (Suis-je contaminé par la féerie de Disneyland Paris?) Enlevez l'application  ExtendsPrivileges-sms. Que se passe-t'il ?
+Plus concrètement, vous pouvez, avec cette approche, indiquer à l'utilisateur que pour des raisons de sécurités la fonctionnalité d'envoi de SMS est inactif. En cliquant sur un lien, vous pouvez l'envoyer sur le play store pour installer l'application complémentaire permettant d'activer l'utilisation du SMS. Avec 4Ko de plus dans le téléphone, l'application est maintenant capable d'envoyer des messages.
+Lors de l'installation de l'application initiale, l'utilisateur n'est pas surpris des privilèges demandés. Certains sont accordés à discrétions, en installant ou en supprimant une application complémentaire.
+Intégration plus fine
+Nous pouvons maintenant, intégrer tous cela. Que dites-vous d'injecter l'APK permettant d'ajouter le privilège dans notre application ? L'idée est d'importer l'APK SMS dans le répertoire asset du projet.
+L'application vérifie si elle possède le privilège d'envoi de SMS. Si ce n'est pas le cas, elle propose d'installer l'application qu'elle possède. Il faut tout d'abord la copier dans un fichier accessible par toutes les applications.
+private Uri copyAssets(String module)
+{
+        AssetManager assetManager = getAssets();
+        InputStream in = null;
+        OutputStream out = null;
+        try
+        {
+                final String name=module+".apk";
+                in = assetManager.open(name);
+                out = openFileOutput(name, Context.MODE_WORLD_READABLE);;
+                final byte[] buffer = new byte[4096];
+                int read;
+                while ((read = in.read(buffer)) != -1)
+                {
+                        out.write(buffer, 0, read);
+                }
+                return Uri.fromFile(getFileStreamPath(name));
+        }
+        catch (IOException e)
+        {
+                Log.e(TAG, e.getMessage());
+                return null;
+        }
+        finally
+        {
+                try
+                {
+                        if (out!=null) out.close();
+                        if (in!=null) in.close();
+                }
+                catch (IOException e)
+                {
+                        // Ignore
+                }
+        }
+}
+Ensuite, il suffit de demander le lancement d'une activité pour installer le module.
+final Uri uri=copyAssets(module);
+assert (uri!=null);
+                        
+final Intent intent = new Intent(Intent.ACTION_VIEW);
+intent.setDataAndType(uri, "application/vnd.android.package-archive");
+return intent;
+Mais, cela ne fonctionne pas toujours. En effet, il faut que l'utilisateur ai indiqué qu'il accepte l'installation d'application depuis une source autre que Google Play (paramètre Application/Source inconnues pour Android version 2.x, ou Sécurité/Source inconnues pour Android version 3.x).
+Il faut alors proposer également une approche utilisant Google Play.
+if (Settings.Secure.getInt(getContentResolver(),
+        Settings.Secure.INSTALL_NON_MARKET_APPS, 0)==0)
+{
+        Log.d(TAG,"Use market");
+        String app=getPackageName()+"."+module;
+           return new Intent(
+                   Intent.ACTION_VIEW,
+                   Uri.parse("market://details?id="+app))
+                   .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+}
+Il faut alors également publier le module SMS sur le market.
+Comme tous cela ne fonctionne qu'a condition de partager la même signature, vous devez builder le projet ExtendPrivileges-sms avec votre clef de signature de déverminage ou de publication, puis copier le fichier bin/ExtendPrivileges-sms.apk dans ../ExtendPrivileges-V2/asset/sms.apk.
+La version 2 de l'application utilise cette nouvelle approche. L'expérience utilisateur est alors très sympathique. Lors de la première utilisation, l'utilisateur ne voit pas le champ de saisie ni le bouton pour envoyer le SMS, mais un bouton pour augmenter les privilèges. S'il le clique, il voit la page d'installation du module.
+  
+  
+
+Puis, il retourne à l'application et bénéficie du nouveau privilège.
+Glups. C'est une faille ?
+Nous voyons qu'en réalité, les privilèges accordés à une application ne sont pas complètement décrit à l'utilisateur. En effet, les privilèges réels correspondent à l'union des privilèges accordés aux applications du même auteur et partageant le même processus. Deux applications anodines peuvent demander des privilèges légitimes qui ne présentent pas de problèmes individuellement, mais qui combinés, peuvent ouvrir la porte à des usages malveillants.
+Les applications de sécurités se font généralement leurrés. Elles n'identifient pas l'union des privilèges accordés à une application. J'ai testé les privilèges détectés avec « avast! Mobile security », « Lookout Antivirus et sécurité », « NQ Mobile Security & Antivirus », « McAfree Mobile Security », etc. Aucune n'a réagi correctement.
+Voilà. J'espère vous avoir éclairci sur différents mécanismes subtile d'Android concernant la sécurité, et comment avec un peu de réflexion il est possible les dépasser.
+Pour conclure : "Vers l'infini et au delà !" (Buzz l'éclair)
+
+
+article@prados.fr
+Architecte Smart Mobility et Open Source - AtoS

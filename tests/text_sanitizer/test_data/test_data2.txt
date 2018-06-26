@@ -1,0 +1,1 @@
+HTML5 permet de gérer le mode hors-ligne lors de la consultation d'un site.

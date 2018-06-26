@@ -1,0 +1,163 @@
+﻿Architecture des processeurs
+  
+
+Dans cette série d'articles, nous vous proposons de révéler les quatorze secrets des algorithmes à hautes fréquences. Avant cela, nous allons nous focaliser sur les éléments présents dans les processeurs que vont exploiter les différents secrets.
+Par Philippe PRADOS - 2015
+www.prados.fr
+
+
+Les architectures des processeurs
+Les algorithmes à haute fréquence cherchent à exploiter au maximum les spécificités des processeurs pour bénéficier des performances maximales. Malgré des architectures parfois différentes, des éléments sont communs entre les différentes générations des processeurs Intel, AMD ou ARM, en 32 ou 64 bits.
+Pour bien comprendre les différents secrets utilisés par les algorithmes à haute fréquence, il faut tout d’abord avoir une vision simplifiée des architectures des processeurs. C’est ce que nous vous proposons d’étudier. Il s'agit d'une présentation très simplifiée, sans prétention d'être parfaite ou exhaustive.
+Pour commencer, un peu de vocabulaire.
+Un node est une machine physique possédant de la RAM.
+Un socket est un support où installer un processeur. Pour simplifier, cela correspond au processeur physique, le composant lui-même. Un socket possède un accès direct au bus d'accès à la RAM.
+Un core est un sous-ensemble du processeur physique, capable d’exécuter des traitements indépendamment des autres cores du socket.
+Les virtuals cores sont des traitements exécutés en parallèle par un seul core, si cela est possible via la technologie Simultaneous multithreading (SMT). Il s'agit essentiellement d'un autre jeu de registres. Tous les caches sont alors partagés.
+  
+
+Chaque core possède un nombre de virtual core (2 sous Intel). Les instructions sont exécutées en parallèles si l’exécution d’une instruction ne dépend pas du résultat de la précédente. Pour optimiser les possibilités de parallélisme, des registres supplémentaires sont disponibles. Le core analyse les instructions à exécuter, et peut décider de renommer des registres pour isoler les traitements indépendants. Les performances sont inférieures à deux vrai core.
+Pour Linux, le scheduleur prend des décisions de migration de thread[1] d’un core à un autre suivant différentes règles, basé sur le gain de puissance. Combien vais-je gagner à migre un thread d’un core à un autre ? D’un socket à un autre ? D’un virtual core à un core ? De son point de vue, le gain de migrer un thread vers un virtual core est de 10%. Migrer un thread vers un autre core est de 100%.
+Efficacité des instructions assembleurs
+Les instructions assembleurs peuvent être directement câblées dans un socket. C’est le cas de l’arithmétique binaire comme le AND. Elles prennent alors généralement un seul cycle horloge.
+ schema 07.png 
+
+Certaines instructions utilisent des micro-codes, c’est-à-dire des micro-programmes présent dans le core. C’est le cas de la division ou du modulo par exemple. En effet, une division binaire s’effectue comme une division en base 10, avec plusieurs itérations, mais avec des comparaisons et des décalages de bits. Ces instructions prennent plusieurs cycles horloges (Entre 50 et 80 cycles pour une division ou un modulo).
+ schema 08.png 
+
+Pour les algorithmes à haute fréquence, il faut privilégier les instructions câblées, car elles sont bien plus rapides. Nous verrons que cela remet en cause des algorithmes bien connus dans les implémentations des dictionnaires type hash table.
+Enchaînement des caches d’accès à la mémoire
+Le modèle mémoire que nous rencontrons généralement est symétrique (Symetric MultiProcessor[2]– SMP). Tous les cores et les sockets accèdent à la même RAM du node (du serveur). Il faut alors gérer les accès concurrents à la RAM par les différents sockets. En effet, chaque socket possède plusieurs caches qu’il faut synchroniser avec les autres sockets. Au delà de 8 sockets, ce modèle ne fonctionne plus.
+Il existe également le modèle NUMA[3] ( (Non Uniform Memory Access) où les données sont associées à chaque socket. L'accès est plus rapide vers la RAM du socket et plus lent pour les données partagées. Les dernières générations utilisent ce modèle pour associer de la mémoire à chaque socket. Un paramètre de la JVM permet d’optimiser l’exécution en exploitant ces zones mémoires pour les objets dans l’eden (-XX:+UseNUMA[4])
+Dans les algorithmes à haute fréquence, demander des données qui ne sont pas en cache a un sérieux impacte sur les performances. L'accès séquentiel est bien plus rapide qu'un accès aléatoire. Co-localiser les données réduit significativement les erreurs de caches (cache-miss) et donc les performances.
+Les modèles d'accès à la mémoire[5] doivent être compris et maîtrisé pour concevoir des algorithmes efficaces.
+Un microprocesseur peut être capable d'exécuter des centaines, voire des milliers d'instructions dans le temps nécessaire à l'accès à la RAM. Une succession de caches est utilisée pour optimiser cet accès. Leur taille est inversement proportionnelle à leur vitesse. Plus le cache est petit, plus il est rapide. La succession des caches permet d’optimiser le débit d’accès à la mémoire pour les données les plus proches.
+ schema 09.png 
+
+Les différents caches ont des temps d'accès bien différents, car les technologies sont différentes et plus ou moins chères. Les tailles et les vitesses d'accès sont variables suivant les générations des processeurs.
+
+
+Niveau de cache
+	Taille
+	Temps d'accès en cycle
+	Concurrence
+	Technologie
+	Géré par
+	Registre
+	1/2 KB
+	µ
+	virtual core
+	Custom CMOS
+	Compilateur
+	Niveau 1
+	8KB – 128 KB
+	1
+	core
+	SRAM
+	Hardware
+	Niveau 2
+	256 KB
+	3
+	core
+	SRAM
+	Hardware
+	Niveau 3
+	3 MB – 32 MB
+	10 – 20
+	Socket
+	SRAM
+	Hardware
+	RAM
+	4 MB – 4 TB
+	200+
+	Chaque région séparément
+	Variable
+	OS
+	
+
+Vous trouverez une animation des évolutions des performances des différentes technologies http://goo.gl/rMTnFN.
+Les caches sont organisés en blocs d'octets qui se suivent. Chaque bloc (ou ligne de cache) est identifié par l'adresse de début de la RAM qu'il représente. Les blocs sont conçus pour ne pas se chevaucher.
+ schema 10.png 
+
+Les registres
+Les données les plus rapides sont les registres du core. Ce sont des variables pour les instructions du microprocesseur. Il y a un nombre limité de registre. Certains sont spécialisés pour récupérer les résultats des calculs, pour servir d’index aux boucles, pour maintenir les différents flags (carry, résultat à zéro, résultat d’une comparaison, etc.).
+Les compilateurs JIT ou classique essayent de placer les variables locales à une fonction ou une méthode dans les registres du processeur. Lorsque qu’un programme manipule une case mémoire, le compilateur peut dédier un registre à celle-ci afin d’améliorer les performances. Toutes les manipulations s’effectuent alors dans le registre dédié. Lorsque la variable n’est plus modifiée dans la fonction ou la méthode, la valeur du registre est écrite en mémoire. Cela a un impact sur la visibilité des modifications dans la mémoire. En effet, un registre n’est pas une case mémoire. Modifier une variable dans un registre ne permet pas à un autre thread de voir les modifications. Elles ne sont visibles qu’à la sortie de la fonction ou de la méthode.
+En architecture 64 bits, le nombre de registres est suffisamment important pour que pratiquement tous les paramètres et toutes les variables locales utilisent un registre dédié. Le protocole d’appel entre les méthodes s’appuie également fortement sur les registres. L'appelant alimente des registres avant l'appel. La pile est utilisée pour sauver l'état des registres avant l'appel et pour les paramètres complémentaires n'ayant pas trouvés de place dans un registre.
+Pour imposer au compilateur de ne pas utiliser de registre pour une variable spécifique, il faut utiliser l’attribut volatile. Ainsi, les modifications sont directement écrites en mémoire.
+Pour paralléliser des instructions dans le même cycle horloge, il ne faut pas qu'une instruction dépende du résultat d'une autre instruction. Deux flux de traitements peuvent être entrelacés s'ils n'ont pas d'impact l'un sur l'autre. Les compilateurs essayent d'appliquer cette optimisation.
+Pour améliorer le parallélisme dans un seul core, les fondeurs ont ajoutés des registres complémentaires cachés. Une phase en amont de l’exécution des instructions analyse le code future. Si l’analyse détecte que le code est sérialisé sans justification, que des instructions peuvent être parallélisées juste en renommant des registres, elle va alors les renommer[6] en interne. Cela permet d'utiliser les registres complémentaires, et ainsi, améliorer l’hyper-threading. Ainsi, dans le même cycle d’horloge, plusieurs instructions peuvent s’exécuter en même temps.
+Enfin, des jeux de registres sont dédiés à des cores virtuels[7] pour isoler complètement les traitements sur le même core. Dans un i7, il y a quatre cores physique dont huit cores virtuels. Les cores virtuels partagent tous les caches.
+Les caches d'accès à la RAM
+Après les registres, nous trouvons une série de 3 caches pour optimiser l’accès à la RAM. En effet, ce qui ralenti le plus les programmes, c’est l’accès à la RAM (Plus de dix fois plus lent que l'accès aux registres).
+Le schéma suivant indique l'organisation des caches par rapport aux différents cores.
+ schema 11.png 
+
+Le cache de niveau 1 (L1) est composé de blocs (généralement de 64 bytes), représentant une partie de la mémoire physique. Chaque core possède son cache L1. Nous verrons que la taille d’un bloc est une information importante pour les algorithmes à haute fréquence.
+Le cache de niveau 2 (L2) est également composé de blocs, mais plus nombreux et plus grands. Il permet d’avoir plus de données, mais avec un débit plus faible.
+Le cache de niveau 3 (L3) est sur le même modèle, mais bien plus important. Les données sont partagées entre les cores.
+Cette architecture est importante, car bien exploitée, il est possible d’améliorer notablement les performances. En gardant au maximum les données dans le cache de niveau 1, le code est bien plus rapide. Cela va être exploité par les algorithmes à haute fréquence. Nous verrons comment.
+Les processeurs exécutent préventivement[8] les instructions suivantes en espérant avoir toutes les données nécessaires dans le cache de niveau 1. En cas d’échec, l'instruction est rejouée[9] après alimentation du cache.
+Avoir un cache-miss (donnée non présente dans le cache), fait perdre entre 500 et 1000 instructions assembleurs. Pensez-y lors de la rédaction d'algorithmes important.
+Cache sur disque
+Le processeur offre la possibilité à l’OS de participer à l'accès à la mémoire, via le Swap-file. Une partie de la RAM peut est déversée sur disque et remontée lorsque cela est nécessaire. Cela est possible car les adresses mémoires des programmes assembleurs passent par une indirection et une table d’allocation physique.
+La mémoire est découpée en segment de taille fixe. Chaque processus possède une table LDT[10] (Local Description Table) pour associer l’adresse d’un segment de mémoire logique, vu par le programme, en une adresse physique dans la RAM. Il existe également une table globale (GDT[11]) pour l’OS. Les processus ont alors une vue logique de la mémoire linéaire, alors qu’en réalité, la mémoire physique associée peut être répartie physiquement n’importe où.
+Dans la LDT, il y a des flags permettant d’indiquer si le segment mémoire associé est en lecture seul, si un code présent peut être exécuté (très important pour limiter les attaques de type « débordement de buffer »), si le segment n’est pas en RAM mais sur le disque, etc.
+Lorsqu’une violation d’accès à un segment mémoire est détecté par le processeur, une exception est déclenchée. L’OS la capture. Il possède alors l’adresse précise de l’instruction fautive. L’OS peut alors résoudre le problème avant de demander à ré-exécuter l’instruction. Par exemple, l’OS peut sélectionner un autre segment mémoire, le sauver sur disque afin de libérer de l’espace en RAM physique, puis lire le segment cible depuis le disque vers cette RAM physique libérée. Après un ajustement de la LDT, en redemandant à l’instruction de s’exécuter, le programme reprend son cours normalement. C’est exactement ce qui se passe lors de l’utilisation de la swap file.
+Ce modèle est également utilisé lors du mappage de fichier en RAM. C’est l’OS qui décide quand swaper la RAM et un fichier identifié par l'OS.
+Cette couche de cache est bien entendu la plus lente. Il est préférable d’ajouter de la mémoire que de devoir utiliser ce mécanisme. Mais, astucieusement utilisé, cela permet des architectures originales pour partager des données entres plusieurs processus ou pour exploiter un disque SSD comme une extension de la RAM. Des solutions comme XAP MemoryXtend[12] de GigaSpace exploitent cela. L’accès est dix à cent fois plus lent qu’un accès direct à la RAM, mais bien plus rapide que l’exploitation d’un disque magnétique. Le coût d’un disque SSD est par contre bien moins chère que la RAM.
+Toutes ces évolutions sont possibles, car depuis les processeurs 64 bits, le bus d’adressage de la mémoire RAM est de même taille que l’adressage de la mémoire de masse (264 bytes soit 16 exbibytes[13]).
+La mémoire globale RAM
+La mémoire globale (la RAM) étant partagée par les différents sockets, la même case mémoire peut être modifiée simultanément par plusieurs sockets. C’est le cas dans les architectures SMP[14] (Symetric Multi Processor) que nous rencontrons avec les processeurs Intel ou ARM.
+Il est donc nécessaire de synchroniser les accès à la RAM par les différents sockets. Pour cela, un bus système[15] rapide est présent pour permettre la communication entre les sockets (via le protocole MESI[16]). Chaque socket lit toutes les trames.
+Pour simplifier, vous pouvez imaginer que la RAM et les caches forment une sorte de base de donnée répartie, communiquant via un réseau (un bus). Les données arrivent par paquet de la taille du bloc de mémoire correspondant à la taille d'un bloc de cache de niveau 1. (C'est très simplifié)
+Les lectures et les écritures en RAM s’effectuent via les caches. Pour les alimenter, une demande est envoyé sur le bus. Cela permet également de signaler aux autres sockets qu’une zone mémoire a été modifiée dans un socket, et qu’il faut invalider les caches correspondant. Si un autre core ou un autre socket possède une copie de la zone, il peut répondre à la demande. Sinon, c'est le contrôleur de la RAM qui s'en charge.
+Tant que les données ne sont pas disponibles, le core attend. Il peut attendre très longtemps, l'équivalent de plusieurs centaines d'instructions.
+Un algorithme qui passe son temps à invalider des caches n’est pas performant. Imaginez les impacts que cela peut avoir avec 256 sockets ? Le bus entre les sockets serait saturé de demande d’invalidation, puis de demande de relecture de la RAM.
+Nous verrons que des astuces permettent d’éviter de le saturer, en associant des variables à chaque core par exemple.
+En fait, au-delà d'un certains nombres de sockets, ce modèle ne fonctionne plus. Les processeurs et les OS peuvent alors exploiter le mode NUMA où des zones mémoires plus rapides sont dédiés à chaque core, sans vocation à être partagé par les autres. L'OS analyse les consommateurs des segments, pour en associer certains à chaque core. L’élection est un mécanisme complexe qui évolue de version en version de l'OS. Des API permettent la migration de zone mémoire classique vers les zones NUMA, plus rapide.
+À noter que déclarer une variable volatile impose que la zone mémoire correspondant à la variable et aux variables du même bloc mémoire de cache soit invalidées dans les caches de tous les cores à chaque modification. Il est alors préférable de les éviter. En même temps, c’est a priori le seul moyen pour que les modifications soient visibles par tous les cores. Nous verrons comment mieux exploiter cela.
+La visibilité des modifications par plusieurs sockets
+Un problème plus subtil est la réorganisation des écritures et des lectures. Sur la mémoire RAM, les lectures et les écritures ne sont pas toujours effectuées dans l’ordre demandé par le programme. Cela peut poser des problèmes dans des algorithmes multi-threads. Par exemple, un thread écrit des données puis valorise un flag pour signaler à un autre thread qu’il est prêt. Cela est connu comme le modèle write-release. Si les écritures sont réordonnées, d’autres threads peuvent voir le flag avant de voir les données modifiées.
+Les processeurs X86 et x64 ne réordonnent pas les écritures par rapport aux autres écritures, ou les lectures par rapport aux autres lectures. Ils réordonnent les lectures par rapport aux écritures, afin d’optimiser le débit sur le bus systeme vers la RAM et réduire le nombre de trame à envoyer sur le bus. Comprenez bien que cela est invisible pour le thread qui manipule les données. Les impacts sont visibles dans les autres threads, et particulièrement, les autres threads sur les autres sockets (le caches de niveau L3 sont partagées par les cores d’un sockets, donc cohérents entres eux à ce niveau). Seul les caches L1 et L2 peuvent être inconsistant entres eux dans un socket.
+Ce ré-ordonnancement peut casser des algorithmes d’exclusions mutuels. Par exemple, dans l’algorithme de Dekker[17], chaque thread valorise un flag pour indiquer qu’il souhaite entrer dans une zone critique, puis vérifie que l’autre thread est dans une région critique ou essaye d’y entrer. Cela ne fonctionne pas sans effort supplémentaire, en déclarant tous les flags comme volatile par exemple..
+Il est possible de demander aux processeurs de vider les caches de lectures et/ou les caches d’écriture. Ainsi, la véritable RAM est sollicitée pour récupérer des données fraîches. Cela a un impact très important sur les performances. L’accès à la RAM est en effet bien plus lent que l’accès au cache de niveau 1.
+Les algorithmes à haute fréquence nécessitent de maîtriser l’atomicité des manipulations mémoires, et la synchronisation des caches. Ils sont plus complexes à concevoir, mais présentent alors des performances bien supérieures.
+L’atomicité des instructions assembleur
+Sur les processeurs modernes, on peut présumer que les lectures et les écritures sur les types natifs sont atomiques. Sur un processeur 32 bits, les manipulations de mémoires sont effectuées 32 bits par 32 bits, par une transaction sur le bus mémoire. Pour un type long ou double, tenant sur 64 bits, il faut, en théorie, deux écritures successives en mémoire, deux transactions sur le bus mémoire. Un autre socket peut alors voir une modification partielle. En 32 bits, ces types de données ne sont pas manipulable de façon atomique. En 64 bits, tous les types primitifs sont manipulés de façon atomiques car le bus est sur 64 bits. Par contre, les manipulations de données plus grandes que huit octets ne sont pas atomiques.
+Les opérations composites, comme les séquences lecture-modification-écriture lors de l’incrémentation d’une variable, ne sont pas atomique par nature. Sur Xbox 360, cela correspond aux instructions lwz, addi, et stw. Trois instructions différentes. Si le scheduler décide d’interrompre le programme entre deux instructions, tout peut arriver.
+Les processeurs Intel proposent une instruction spécifique (INC) pour incrémenter une variable unitairement (D’où l’existence de l’opérateur d’incrémentation ++i  !). Mais techniquement, cela se traduit par deux transactions sur le bus mémoire. L’instruction est atomique vis-à-vis d’un core (elle ne peut être interrompu en son milieu), mais n’est pas atomique vis-à-vis des autres socket ou des autres cores. De même, XADD permet l'ajout à une variable et retourne la valeur précédente, mais sans être atomique.
+Il existe un préfixe à ajouter à une instruction pour bloquer le bus mémoire le temps de l’instruction (lock). Des classes Atomic* du package java.util.concurrent permettent d’avoir accès à ces instructions. Des équivalant existent maintenant pour C/C++.
+Instructions assembleurs pour algorithmes à haute fréquence
+Cette notion d’atomicité est importante. En effet, des instructions assembleurs sont spécifiquement conçu pour exploiter cela dans des algorithmes à haute fréquence.
+Par exemple, l’instruction cmpxchg des architectures x86 et x64 permet de valoriser une variable si la valeur d’une autre est égale à une valeur spécifique. L’instruction est équivalente à ce pseudo code.
+bool compare_and_swap(int* accum, int* dest, int newval)
+{
+  if (*accum == *dest) {
+      *dest = newval;
+      return true;
+  } else {
+      *accum = *dest;
+      return false;
+  }
+}
+Elle permet de valoriser une donnée dans certaines conditions. Si la modification réussie, true est retourné. Sinon, false indique l'échec.
+Enrichi d’un lock pour synchroniser les caches, cette instruction devient atomique. Elle est très utilisée dans les algorithmes à haute fréquence.
+Dans le prochain article, nous vous révélerons enfin les premiers secrets des algorithmes à haute fréquence.
+________________
+[1] http://lwn.net/Articles/80911/
+[2] https://fr.wikipedia.org/wiki/Symmetric_multiprocessing
+[3] https://en.wikipedia.org/wiki/Non-uniform_memory_access
+[4] http://docs.oracle.com/javase/7/docs/technotes/guides/vm/performance-enhancements-7.html#numa
+[5] http://mechanical-sympathy.blogspot.co.uk/2012/08/memory-access-patterns-are-important.html
+[6] https://en.wikipedia.org/wiki/Register_renaming
+[7] https://fr.wikipedia.org/wiki/Simultaneous_multithreading
+[8] https://en.wikipedia.org/wiki/Speculative_execution
+[9] https://en.wikipedia.org/wiki/Replay_system
+[10] https://fr.wikipedia.org/wiki/Segmentation_(informatique)
+[11] https://fr.wikipedia.org/wiki/Global_Descriptor_Table
+[12] http://www.gigaspaces.com/xap-memoryxtend-flash-performance-big-data
+[13] https://en.wikipedia.org/wiki/Exbibyte
+[14] https://fr.wikipedia.org/wiki/Symmetric_multiprocessing
+[15] https://en.wikipedia.org/wiki/System_bus
+[16] https://en.wikipedia.org/wiki/MESI_protocol
+[17] https://fr.wikipedia.org/wiki/Algorithme_de_Dekker

@@ -1,0 +1,1 @@
+Android propose une approche de la sécurité basé sur la déclaration de privilèges.

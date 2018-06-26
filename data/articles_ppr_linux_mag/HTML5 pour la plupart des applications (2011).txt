@@ -1,0 +1,301 @@
+﻿HTML5 pour la plupart des applications
+  
+
+Les applications Web pour mobile sont des sites spécialement optimisés pour être utilisés par des ordiphones. Pourquoi développer une application pour mobile avec les technologies web classiques ?
+Par Philippe PRADOS - 2011
+www.prados.fr
+Récapitulons les avantages et inconvénients de chaque approche. Les avantages des applications natives :
+- Des millions de cartes de crédits sont disponibles en un clic pour acheter l'application ;
+- Il est possible d'exploiter immédiatement tous les éléments hardware du terminal ;
+Les inconvénients des applications natives :
+- Il faut payer pour devenir développeur ;
+- Les applications ne fonctionnent que sur les téléphones Android, voire sur une sous-partie d'entre eux ;
+- Il faut développer avec Java ;
+- Le cycle de développement et d'apprentissage est long et difficile ;
+- Elles ne peuvent pas être indexées ;
+De même, il y a des avantages à réaliser des applications Web :
+- Les développeurs peuvent utiliser leurs outils et compétences actuelles ;
+- Les applications peuvent fonctionner sur tous les périphériques possédant un navigateur Web ;
+- Il est possible de corriger les bogues en temps réel ;
+- Le cycle de développement est rapide ;
+- Les pages peuvent être indexées ;
+Et des inconvénients :
+- Il n'est pas possible d'exploiter tous les composants hardware (il existe des solutions) ;
+- Vous devez gérer vous même le paiement si vous souhaitez monétiser votre application ;
+- Il n'est pas possible d'avoir des effets sophistiqués pour l'interface utilisateur
+En 2010, une étude de Adobe indiquait que les utilisateurs d'ordiphones préfèrent utiliser le navigateur Web pour une grande partie des usages (Cf. Illustration 1). Cela peut s'expliquer par  la volonté d'éviter de polluer le téléphone avec des centaines d'applications rarement utilisées.
+
+
+
+
+
+
+De nombreuses vidéos démontrent qu'il est possible d'avoir une application équivalente en XHTML5 et en natif, pour les téléphones Android, iPhone ou autres. La mise en parallèle des deux versions des mêmes applications ne permet pas à priori d'identifier laquelle est native et laquelle est une application Web.
+La courbe d'apprentissage d'un nouvel environnent de développement est longue et fastidieuse. De plus, comme les technologies sont différentes suivant les écosystèmes, il est nécessaire d'avoir des équipes pluridisciplinaires. Il est rare d'avoir toutes les compétences pour tous les modèles et écosystèmes chez le même ingénieur.
+Le développement à base de technologies déjà maitrisées comme HTML, CSS et Javascript, permet de réaliser des applications mobiles rapidement, sans devoir apprendre de nouveaux langages, ou maitriser les subtilités de chaque environnement.
+Le développement d'application native est plus complexe qu'il n'y paraît au premier abord. Réaliser une démonstration est rapide ; réaliser une application sérieuse qui fonctionne dans toutes les conditions est un chalenge plus ambitieux et plus couteux.
+De plus, le marché des applications Web est largement supérieur au marché des applications natives. La très grande majorité des téléphones, hors ordiphones, ne peuvent recevoir d'applications spécifiques. Les développeurs d'applications peuvent atteindre un public plus large sur plusieurs périphériques et plates-formes d'un seul coup. Les plates-formes Android, iPhone et Windows Mobile ne représentent qu'une fraction du marché des téléphones dans son ensemble.
+Les applications Web sont-elles moins performantes que les applications native ? Cela était vrai avant les nouvelles fonctionnalités proposées par HTML5. Avec Android, il est maintenant possible de gommer la différence entre les deux mondes pour la plupart des applications.
+Les éditeurs de solutions ont du mal à se positionner entre les deux approches. Par exemple, Microsoft utilise Silverlight pour le développement sous Windows Phone 7, et au même moment, annonce abandonner Silverlight au bénéficie de HTML5. Mais, les téléphones  Windows Phone 7 ne sont pas compatible HTML5 ! Cherchez la logique, moi je renonce.
+Le dernier point qui rend attractif la réalisation d'applications Web est que cela utilise une plateforme ouverte. Les développeurs n'ont pas à consacrer des semaines pour une application qui peut être rejetée (dans certains écosystèmes). Les applications Web ne subissent pas la censure.
+Il ne faut pas considérer qu'un site pour mobile est juste une version miniature du site Web. C'est très différent de ce que l'on réalise pour une utilisation sur un bureau. Il y a un écran tactile plus petit et pas de souris. L'espace est restreint et le doigt est plus gros qu'une souris ! Il y a également quelques restrictions techniques.
+Avec un peu d'effort, il est possible d'obtenir un site très satisfaisant avec juste HTML5, CSS et  Javascript, à condition de revoir l'ergonomie ou les services offerts.
+La plupart des applications pour mobile nécessitent une connexion au réseau. Cette connexion peut être permanente ou temporaire. Les applications exposent des formulaires, invoquent un serveur sur le réseau et affichent les résultats.
+Ce modèle d'application peut très facilement être rédigé en HTML5 pur, sans connaissance particulière d'Android. Cela présente également l'avantage d'être portable sur d'autres architectures de téléphones. La même application peut être présente sur différentes places de marchés (sauf Windows Phone 7 qui n'accepte pas HTML5 ).
+Les nouvelles fonctionnalités de HTML5 permettent en effet beaucoup de choses qui n'étaient pas possibles avec les versions précédentes. De nouveaux frameworks apparaissent pour faciliter la création d'applications riches pour les différentes technologies. Une version alpha de jQuery Mobile permet, en quelques Kilo-octets, de réaliser des applications riches avec une ergonomie avancée, des animations lors du passage d'une page à une autre, etc.
+Le W3C avec MobiWebApp [1] pour les spécifications, Mozilla avec Open Web Application[2] (une place de marché pour application Web) ou d'autres proposent de créer et d'héberger des sites[3] spécialement conçus pour les téléphones.
+Il ne faut pas s'inquiéter du temps de téléchargement des pages de l'application, car une bonne utilisation des nouvelles API de HTML5 permet une utilisation hors ligne.
+Les applications mobiles Web utilisant HTML5 peuvent nativement embarquer de l'audio et de la vidéo, utiliser la position géographique de l'utilisateur et afficher des animations sans utiliser Flash. Elles peuvent également fonctionner en absence de réseau par la mise en cache des pages, et l'exploitation d'une base de données locale.
+Il est facile de tester l'application dans une première ébauche, en se passant d'émulateur de mobile. Un déverminage sous Google Chrome ou Chromium permet de lever une grande partie des erreurs de codage. Ensuite, l'ergonomie et l'affichage sera qualifié sur l'émulateur, pour différentes configurations. C'est l'avantage de la portabilité de HTML5.
+Nous allons parcourir les nouvelles fonctionnalités permettant d'améliorer l'expérience utilisateur et de faciliter le développement d'une application Web pour mobile :
+- L'impact sur la mise en page ;
+- Les marqueurs sémantiques ;
+- Les formulaires ;
+- Les canevas ;
+- SVG ;
+- CSS3 ;
+- La géolocalisation ;
+- La persistance ;
+- L'utilisation sans réseau ;
+- et les traitements asynchrones.
+Mise en page
+Par défaut, Android considère que les pages Web consultées ont une largeur de 980 pixels. Cela permet d'avoir une mise en page correcte pour les pages non conçues pour un terminal mobile. Un zoom est généralement nécessaire pour pouvoir lire le texte de la page.
+Google propose également un outil permettant de réorganiser une page Web pour améliorer sa visibilité sur un téléphone mobile. La conversion s'effectue à la volée via le site http://www.google.com/gwt/n.
+La première chose à faire pour adapter un site à une présentation sur un mobile consiste à intervenir sur la largeur initiale à accorder à la page[4]. Plusieurs informations peuvent être indiquées dans un marqueur meta :la largeur, la hauteur, la possibilité d'effectuer un zoom et dans ce cas, la valeur initiale, minimale et maximale.
+<meta name="viewport" content="user-scalable=no, width=device-width" />
+Ensuite, il est possible d'adapter la feuille de style suivant la taille de l'écran et par exemple d'organiser les éléments différemment sur un téléphone ou sur une tablette.
+<link rel="stylesheet" type="text/css"
+ href="android.css" media="only screen and (max-width: 480px)" />
+<link rel="stylesheet" type="text/css"
+ href="desktop.css" media="screen and (min-width: 481px)" />
+La feuille de style permet d'avoir une ergonomie équivalente à une application native et portable entre Android, iPhone, Blackberry, etc. (Cf. Illustration 2)
+  
+
+Marqueurs sémantiques
+Plusieurs marqueurs sémantiques permettent d'aider à la structuration de la page, et à la compréhension de celle-ci par les moteurs de recherches (<section/>, <nav/>, <article/>, <aside/>, <hgroup/>, <header/>, <footer/>, <time/> et <mark/>). Ces informations peuvent être exploitées par les scripts pour gérer des flux RSS par exemple. Ils sont également très utiles pour la feuille de style.
+Formulaire
+De nouveaux types de saisies sont proposés. Tout d'abord, ce qui est très important sur un ordiphone, la possibilité d'ajouter un texte d'aide à l'intérieur d'un champ. Cela permet d'économiser de la place sur l'écran. Le nom du champ est visible dans celui-ci et non au-dessus. Un champ peut également déclarer qu'il désire le focus à l'initialisation de la page.
+<input placeholder="Recherche" autofocus="true">
+La saisie d'une valeur numérique avec des boutons d'incrémentations :
+<input type="number" min="1" size="2" step="1" />
+Une saisie d'email. Cela doit adapter les touches présentées sur le clavier virtuel (cela dépend des versions).
+<input name="3" type="email" placeholder="email" size="40"/>
+Une URL :
+<input type="url" placeholder="Site" size="40"/>
+Les différents types de date (date, month, week, time, datetime, datetime-local), les types search et color sont considérés comme du texte simple. Pas de type range (un curseur à déplacer de gauche à droite). Les valeurs des champs ne sont pas vérifiées avant la soumission, même en présence de l'attribut required. Les prochaines versions amélioreront peut être cela.
+Canevas
+Un canevas est une zone rectangulaire permettant des dessins à deux dimensions. Cela permet de dessiner toutes sortes de choses, de manipuler les pixels, dessiner des figures, des dégradés, etc.
+En capturant les évènements de la souris sur le canevas, il est possible d'interagir avec le dessin. Comme les éléments dessinés ne sont pas des objets, il faut redessiner toute la zone du canevas pour déplacer ou enlever un élément. Cela peut se compenser en ajoutant un deuxième canevas sur le premier. La création dynamique d'un objet s'effectue sur le Canevas calque au dessus, puis le dessin est figé sur le Canevas final.
+SVG
+Scalable Vector Graphics permet d'écrire en XML une suite d'instructions de dessin. La particularité de cette approche par rapport aux Canevas et que l'arbre DOM associé est toujours disponible. Il est alors possible de modifier dynamiquement un graphique SVG ou de recevoir des évènements depuis les différents éléments.
+Cette technologie est à privilégier lors de la réalisation de graphiques de type camembert, courbe de chiffre, etc. La description du dessin étant indépendant de la taille du périphériques, il est plus à même de s'adapter à toutes les situations, d'un ordiphone à une ordinateur de bureau en passant par une tablette ou un téléviseur.
+CSS3
+Les nouvelles fonctionnalités de CSS3 permettent de proposer des mises en pages élégantes, sans devoir surcharger les pages d'artefacts techniques. Il est possible, dans les feuilles de styles, d'organiser les éléments dans des tableaux, des colonnes, d'arrondir les angles, d'ajuster la taille des images de fond des éléments, d'ajouter du flou ou d'ajuster le style suivant la position relative d'un élément ( article:nth-child(2n+1) )[5].
+Toutes ces fonctionnalités permettent d'alléger les pages en récupérant une fois pour toute, une feuille de style.
+Géolocalisation
+Avec un simple Javascript, après accord de l'utilisateur, il est possible d'obtenir la position de ce dernier ou de suivre ses déplacements.
+function updatePosition(position)
+{
+ var latitude = position.coords.latitude;
+ var longitude = position.coords.longitude;
+ alert("Je suis ici "+latitude+","+longitude);
+}
+
+navigator.geolocation.getCurrentPosition(updatePosition,
+ null,
+ { enableHighAccuracy: true });
+Suite à un bug, le paramètre enableHighAccuracy est indispensable pour fonctionner avec Android 2.2. Il indique que l'on désire un positionnement précis. Avec l'émulateur, il faut émettre les coordonnées GPS via Eclipse dans l'onglet DDMS / Emulator control.
+Pour suivre l'utilisateur, le code est un peu plus complexe.
+// Invoqué régulièrement
+function updatePosition(position)
+{
+...
+}
+
+// Déclenchement de la poursuite de la position
+var watchId = navigator.geolocation.watchPosition(updatePosition);
+
+// Annulation de la poursuite
+navigator.geolocation.clearWatch(watchId);
+Persistance
+HTML5 propose plusieurs technologies pour maintenir un état coté client[6]. sessionStorage est une variable permettant de mémoriser des informations entre les pages, le temps de la session de l'utilisateur. Il s'agit d'un dictionnaire de chaînes de caractères, organisé en clef/valeur. localStorage permet de mémoriser des informations au delà de la durée de vie de la session pour un même site.
+L'exemple suivant permet de mémoriser localement le nombre de consultations par l'utilisateur.
+Vous avez consultez cette page
+<span id="count">???</span> fois.
+<script>
+ if (!localStorage.pageLoadCount)
+   localStorage.pageLoadCount = 0;
+ localStorage.pageLoadCount =
+   parseInt(localStorage.pageLoadCount)+ 1;
+ document.getElementById('count').textContent =
+   localStorage.pageLoadCount;
+</script>
+Des évènements peuvent être émis à chaque modification d'une donnée.
+Il est également possible d'avoir accès à une base de données locale en SQL. La fonction openDatabase permet d'ouvrir une base. Il faut indiquer son nom, sa version, une description, une estimation de sa taille et éventuellement un appel en retour pour modifier dynamiquement la version de celle-ci.
+db=openDatabase('documents', '1.0', 'Local document storage', 5*1024*1024,
+function (db)
+{
+ db.changeVersion('', '1.0',
+   function (t)
+   {
+     t.executeSql('CREATE TABLE docids (id, name)');
+   },
+   error);
+});
+Il est alors possible d'ouvrir une transaction et d'y exécuter des ordres SQL.
+db.transaction(function (tx)
+{
+ tx.executeSql('INSERT INTO docids (id, name) VALUES (1, "android")');
+ tx.executeSql('INSERT INTO docids (id, name) VALUES (?, ?)', [id, userValue]);
+});
+Les requêtes s'effectuent à l'aide d'une fonction de retour.
+db.transaction(function (tx)
+{
+ tx.executeSql('SELECT * FROM docids', [],
+   function (tx, results)
+   {
+     var len = results.rows.length, i;
+     for (i = 0; i < len; i++)
+     {
+       alert(results.rows.item(i).name);
+     }
+   });
+});
+Afin de réduire la communication entre l'ordiphone et le serveur, les informations présentes normalement dans la session de l'utilisateur, coté serveur, seront présentes dans la variable sessionStorage. Les informations devant persister à la session seront mémorisées dans localStorage. Les informations structurées permettant d'ajuster localement les pages seront présentes dans une base de donnée SQL locale.
+Avec toutes ces fonctionnalités, il est alors possible d'avoir une application qui fonctionne, même en l'absence de réseau.
+Utilisation sans réseau
+Il est possible d'indiquer dans un fichier, l'ensemble des URL nécessaires à l'utilisation hors ligne de l'application[7]. Chaque page du site doit avoir l'attribut manifest dans le marqueur html.
+<html manifest="/cache.manifest">
+  ...
+</html>
+Le fichier doit être livré avec le type MIME text/cache-manifest. Cela peut s'effectuer en ajoutant une ligne dans le fichier .htaccess du répertoire, si vous utilisez  Apache.
+AddType text/cache-manifest .manifest
+Ce fichier doit posséder en première ligne une clef permettant de confirmer le format du fichier, puis la liste des URL du site devant être maintenu en cache.
+CACHE MANIFEST
+/clock.css
+/clock.js
+/clock-face.jpg
+Lors de la consultation d'une des page, celle-ci est récupérée normalement. En tâche de fond, toutes les autres pages sont récupérées pour alimenter le cache local. Ensuite, les pages locales sont utilisées, améliorant les performances et permettant une utilisation hors ligne.
+Il est possible d'indiquer que certaines pages doivent obligatoirement utiliser le réseau pour être récupérées. Elles ne seront donc pas accessibles hors ligne. Cela s'effectue toujours dans le fichier cache-manifest, après un en-tête NETWORK.
+CACHE MANIFEST
+index.html
+scripts/jquery.js
+styles/screen.css
+
+NETWORK:
+/login.jsp
+/logo.png
+Sans le réseau, l'image du logo sera considérée comme un lien cassé. Pour éviter l'affichage de liens cassés, il est possible d'indiquer des éléments de substitution. Cela peut également servir à adapter les scripts, les feuilles de styles ou les pages selon les besoins.
+CACHE MANIFEST
+index.html
+scripts/jquery.js
+styles/screen.css
+
+NETWORK:
+/login.jsp
+
+FALLBACK:
+logo.png offline.png
+Cela peut être utilisé avec des URLs partielles, pour remplacer en une seule fois, toutes les images par exemple.
+CACHE MANIFEST
+index.html
+scripts/jquery.js
+styles/screen.css
+
+FALLBACK:
+images/ images/offline.jpg
+Cette approche est essentiellement faite pour permettre une utilisation hors ligne et non pour réduire le trafic réseau sur le serveur.
+Comme la moindre erreur risque d'invalider l'utilisation hors ligne de votre application, il est préférable de rédiger un script en charge de produire ce fichier. Des métas informations dans les pages peuvent indiquer s'ils faut placer l'URL de la page dans NETWORK ou FALLBACK. Ce script peut être exécuté à la demande sur le serveur et gardé en cache.
+Pour déverminer la version hors ligne, comme l'application n'interroge plus le serveur, il faut ajouter des outils en Javascript. L'objet windows.applicationCache permet alors de générer des traces pour chaque état.
+var appCache = window.applicationCache;
+switch (appCache.status)
+{
+  case appCache.UNCACHED: // UNCACHED == 0
+    return 'UNCACHED';
+    break;
+  case appCache.IDLE: // IDLE == 1
+    return 'IDLE';
+    break;
+  case appCache.CHECKING: // CHECKING == 2
+    return 'CHECKING';
+    break;
+  case appCache.DOWNLOADING: // DOWNLOADING == 3
+    return 'DOWNLOADING';
+    break;
+  case appCache.UPDATEREADY:  // UPDATEREADY == 5
+    return 'UPDATEREADY';
+    break;
+  case appCache.OBSOLETE: // OBSOLETE == 5
+    return 'OBSOLETE';
+    break;
+  default:
+    return 'UKNOWN CACHE STATUS';
+    break;
+};
+Pour demander l'adaptation du cache en Javascript, il faut invoquer la méthode update().
+window.applicationCache.update();
+...
+if (appCache.status == window.applicationCache.UPDATEREADY)
+{
+  appCache.swapCache();  // Permute le cache courant et le nouveau
+}
+Un script peut adapter son comportement suivant l'état du terminal. Cela se détermine à l'aide de la variable navigator.online. La modification de ce statut déclenche des événements sur le body.
+<body ononline="updateOnline()"
+     onoffline="updateOffline()">
+ ...
+</body>
+Combiné avec l'utilisation de la persistance, il est alors parfaitement possible de proposer une application Web fonctionnant sans réseau, tout en proposant des calculs, des recherches, des extractions d'informations, etc.
+Web worker
+Un WebWorker est un traitement Javascript qui fonctionne en tâche de fond, sans pouvoir intervenir directement sur l'interface utilisateur. Disponible depuis Android 2.0. Son rôle est d'obtenir des informations depuis le réseau et de le signaler à l'interface utilisateur pour une mise à jour synchrone. Typiquement, un Worker utilise les technologies Ajax pour communiquer avec un serveur Web, en HTTP, XML ou JSON..
+Pour créer un Worker, il faut l'initialiser avec un fichier javascript. Ce dernier fonctionne dans un environnent autonome, indépendant de la page ayant déclenché le traitement. Un appel en retour doit être ajouté pour recevoir les notifications du Worker.
+var myWorker = new Worker('my_worker.js');
+myWorker.onmessage = function(event)
+{
+ alert("Called back by the worker!\n");
+};
+La fonction déclarée sur onmessage sera invoquée lorsque le Worker appelle sa fonction postMessage(). De même, il est possible d'envoyer un message au Worker avec la même méthode sur l'instance du Worker. Les messages transitent après avoir été convertis en JSON.
+Un Worker peut utiliser les fonctions de gestion du temps, permettant de déclencher un traitement périodique (setTimeout(), clearTimeout(), setInterval() et clearInterval()).
+Un Worker peut être interrompu par la page maitre, en invoquant sa méthode terminate(). Il peut également se suicider en invoquant la fonction nsIWorkerScope.close().
+Le Worker peut accéder à l'objet navigator, pour obtenir des informations sur son contexte d'exécution et importer des scripts avec la fonction importScripts().
+Comme cette fonctionnalité n'est pas toujours présente (cas des iPhone <3.2 ou Android < 2.0), il est judicieux ne de pas s'appuyer sur la présence des Workers, mais de les exploiter pour optimiser l'application.
+Divers
+Nous n'avons pas couvert la gestion du son et de la vidéo qui sont à notre sens des fonctionnalités triviales.
+Afin d'optimiser le trafic réseau d'une application Web mobile (chaque octet coûte cher), il est envisageable d'exploiter l'extension à Apache, proposée par Google, permettant de retravailler les fichiers CSS, HTML, Javascript, JPEG et PNG avant leurs diffusions sur le réseau[8]. Mais attention aux manipulations effectuées vis à vis du fichier cache.manifest. Certains filtres combinent des fichiers, en créent des nouveaux ou modifient les URL de toutes les pages.
+Un excellent travail de recensement des spécificités des téléphones est effectué par Peter-Paul Koch. En consultant le site www.quirksmode.org vous trouverez beaucoup d'informations sur  les capacités des différents modèles.
+Packaging des Web applications
+Les utilisateurs d'Android ne savent pas toujours qu'il est possible de placer sur le bureau un signet vers une application Web. Les entreprises désirent également avoir une « application Android » sur la place de marché, avec sa belle icône à l'effigie de la marque. Du coup, on se retrouve avec des milliers d'applications, pratiquement autant que de noms de domaines.
+Il est très facile de proposer une application Android pour intégrer une application Web. Il est alors possible d'avoir une icône spécifique, de supprimer la barre de bouton, d'offrir un accès direct à certaines pages dans le menu. En quelques Ko, votre application Web est encapsulée dans une application standard, pouvant être publiée sur une place de marché.
+Des générateurs d'applications existent, comme l'initiative « Mobile Site Shortcuts[9] » proposé par getjar.com. Il suffit d'entrer une URL et une icône pour générer une application sur mesure.
+Ne doutons pas que d'autres générateurs seront proposés pour différents téléphones, avec des options pour ajouter des menus avec des raccourcis vers différentes pages du site ou pour partager une page avec d'autres via un e-mail, un SMS, Twitter, etc.
+Ces applications légères ont l'avantages de ne consommer pratiquement rien sur le téléphone. Elles n'ont donc pas de raison d'être supprimées par l'utilisateur lorsqu'il désire faire de la place pour télécharger une application beaucoup plus sympathique. Nous ne pensons pas qu'une application à pour objectif d'être la première à être sacrifier !
+Android propose d'ailleurs une option dans le menu de paramétrage pour nettoyer les caches des applications et libérer ainsi des ressources, sans supprimer les applications de type Web (Cf. Illustration 3).
+  
+
+Affinité
+Mais comment permettre aux applications Web d'interagir plus finement avec le téléphone ? Plusieurs initiatives Open-source sont proposées (PhoneGap, RhoMobile ou Titanium Mobile). Elles consistent toutes à étendre les fonctionnalités du Javascript présent dans une page, par l'ajout d'un wrapper dans l'espace de travail de la page. Ces wrappers ont été portés sur différents écosystèmes, permettant une portabilité des applications entre Android, iPhone, Blackberry, Symbian, Palm et Windows Mobile. Bien entendu, il faut les vérifier sur chaque plateforme, car à la marge, certaines fonctionnalités ne sont pas présentes ou fonctionnent différemment.
+PhoneGap[10] semble une option très intéressante. Pour créer une application Web enrichie, il suffit d'ajouter une librairie à un projet Android classique ; de déclarer une activité qui hérite de DroidGap et d'initialiser la page de garde. Si l'URL pointe sur une ressource locale, il faut placer le fichier phonegap.js et index.html dans le répertoire /assets/www du projet. Sinon, vous pouvez directement référencer une URL distante.
+public class App extends DroidGap
+{
+ @Override
+ public void onCreate(Bundle savedInstanceState)
+ {
+    super.onCreate(savedInstanceState);
+    super.loadUrl("file:///android_asset/www/index.html");
+ }
+}
+En déclarant l'activité et en choisissant une icône, vous avez réalisé une application Web plus intégrée dans le téléphone. Elle a accès à l'accéléromètre, la caméra, les contacts, au statut du réseau, aux différentes technologies de notifications (alerte, confirmation, beep et vibration) et aux caractéristiques du téléphone. En 90 Kio pour le fichier APK et moins de 200Kio pour l'application installée, vous avez droit à une icône, à l'absence de la barre de navigation et une application qui se met à jour en même temps que votre site.
+Si vous avez besoin d'autres accès au téléphone, libre à vous d'utiliser une approche similaire pour ajouter un nouvel objet accessible depuis le Javascript des pages. Il faudra alors le porter sur les différentes plate-formes. Un simple ligne java permet de marier les deux mondes.
+appView.addJavascriptInterface(myWrapper, "myWrapper");
+Cet article vous a présenté une approche de développement des applications sous Android, souvent délaissé. Il est pourtant économiquement préférable de rédiger une application Web qu'une application native. Les réticences sont plus théorique ou subjective que réelle. Il y a également l'effet CV qui joue. Il est plus séduisant d'indiquer que l'on a participé à la réalisation d'une application native Android qu'a une application Web HTML5. Nous espérons vous avoir fait changé d'avis et que vous étudierez sans apriori, ces technologies.
+android@prados.fr
+Architecte Senior - Atos Origin - Open Source Center
+[1] http://mobiwebapp.eu/
+[2] https://apps.mozillalabs.com/
+[3] http://www.wobile.fr
+[4] http://learnthemobileweb.com/tag/viewport
+[5] http://net.tutsplus.com/tutorials/html-css-techniques/html-5-and-css-3-the-techniques-youll-soon-be-using/
+[6] http://dev.w3.org/html5/webstorage/
+[7] http://www.whatwg.org/specs/web-apps/current-work/#offline
+[8] http://code.google.com/intl/fr-FR/speed/page-speed/
+[9] http://developer.getjar.com/university/Mobile_Site_Shortcuts
+[10] http://www.phonegap.com

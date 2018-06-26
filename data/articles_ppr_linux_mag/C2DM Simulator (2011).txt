@@ -1,0 +1,344 @@
+﻿C2DM Simulateur
+  
+
+Google propose, à partir de Android 2.2, la technologie C2DM permettant du push vers les applications Android. Nous allons proposer une simulation de ce framework, afin de pouvoir en bénéficier dans des systèmes Android dépourvu des API de Google, ou pour des téléphones plus anciens.
+Par Philippe PRADOS - 2011
+www.prados.fr
+C2DM de Google
+Pour permettre la notification d’événement en mode PUSH aux applications, Google propose une API spécifique, permettant d'injecter un Intent broadcast dans le bus de message d'Android. C2DM pour Cloud to Device Messaging Framework, est une architecture triangulaire : Le périphérique Android, un serveur C2DM de Google et un serveur applicatif désirant pusher des messages aux terminaux.
+Le téléphone doit s'enregistrer au près du serveur C2DM de Google pour obtenir un identifiant unique pour le terminal. Le téléphone communique alors l'identifiant au serveur applicatif. Lorsqu'un événement doit être envoyé au téléphone, le serveur applicatif soumet une requête POST au serveur C2DM de Google, en indiquant l'identifiant obtenu par le téléphone. Le serveur de Google se charge alors d'envoyer le message dès que possible au téléphone Android. Si ce dernier n'est pas connecté, le message est mis de coté.
+Techniquement, Google utilise le socket ouvert en permanence pour Gtalk, comme canal de communication avec le téléphone. C'est ainsi qu'un nouveau mail arrivé sur Gmail peut être signalé au téléphone avant même que votre PC n'en soit informé.
+Comme la couche transport utilise Gtalk, que Gtalk fait parti des applications spécifiques Google et non d'Android, ce framework n'est pas disponible avec un système Android seul.
+Il n'est pas facile de tester cette technologie dans un émulateur Android, ou dans un périphérique dépourvu des API spécifiques de Google.
+Plusieurs identifiants sont utilisés dans ce contexte :
+Le Sender Id est une adresse mail identifiant le propriétaire de l'application. Elle sera utilisée pour émettre un message.
+L'Application ID est le nom du package de l'application. Il permet d'être certain d'envoyer les messages a la bonne application.
+Le register ID est un identifiant unique représentant le téléphone, une fois qu'il a été enregistré au près du service. Cet identifiant peut être mis à jour sans préavis par C2DM. L'application Android doit en tenir compte pour le propager à l'application Web, émettrice des événements.
+L'Authentification token est un identifiant représentant l'application émettrice de message.
+Création du service
+Nous allons ré-écrire une version légère de ce protocole, en mimant complètement l'API de Google. Au passage, nous devrons intégrer différentes sécurités pour résister à plusieurs scénarios d'attaques.
+Nous devons rédiger une application qui ne possède pas d'interface utilisateur, mais simplement un service. C'est ce dernier qui sera invoqué par les applications pour demander l'enregistrement du terminal pour une application donnée et pour recevoir les événements.
+Notre API sera identique à cette de Google, sauf en ce qui concerne le préfixe des différents identificateurs :
+interface Config
+{
+  // Racine des clefs. En modifiant la base,
+  // l'application utilise l'API de Google ou de Simulator
+   static final String BASE="fr.prados.android";
+  //static final String BASE="com.google.android";
+
+
+  static final String REGISTER=BASE+".c2dm.intent.REGISTER";
+  static final String UNREGISTER=BASE+".c2dm.intent.UNREGISTER";
+  static final String REGISTRATION=BASE+".c2dm.intent.REGISTRATION";
+  static final String RECEIVE=BASE+".c2dm.intent.RECEIVE";
+
+
+  static final String PREFERENCE = Config.BASE;
+  static final String POST_REGISTER=
+    BASE.equals("com.google.android")
+      ? "https://google.com/accounts/ClientLogin"
+      : "http://10.0.2.2:8888/ClientLogin";
+    static final String POST_URL=BASE.equals("com.google.android")
+      ? "https://android.apis.google.com/c2dm/send"
+      : "http://10.0.2.2:8888/send";
+  static final String SENDER_ID="mon.compte.google.pour.envoyer.des.messages@gmail.com";
+  static final String SENDER_PASSWD="le.mot.de.passe.du.compte.google";
+}
+Pour demander l'enregistrement du téléphone, il faut déclencher un service avec l'aide d'une intention.
+Intent registrationIntent=new Intent(Config.REGISTER);
+registrationIntent.putExtra("app", PendingIntent.getBroadcast(this, 0, new Intent(), 0));
+registrationIntent.putExtra("sender", SENDER_ID); // L'email du compte applicatif
+startService(registrationIntent);
+Le paramètre app est une astuce permettant au service appelé de vérifier quelle application est à l'initiative de la demande. C'est un premier verrou de sécurité, interdisant à une application tiers de s'enregistrer à la place d'une autre. L'Application ID sera déduit du PendingIntent.
+Lorsque l'enregistrement est effectif, le service émet un message broadcast, c'est-à-dire à toutes les applications. L'application utilisatrice de C2DM doit être prête à le recevoir. Il faut déclarer un receiver dans le AndroidManifest.xml.
+    <receiver
+      android:name=".C2DMReceiver"
+    >
+      <!-- Le filtre pour recevoir des données depuis un C2DM compatible -->
+      <intent-filter>
+        <action android:name="fr.prados.android.c2dm.intent.RECEIVE"/>
+      </intent-filter>
+      <!-- Le filtre pour recevoir des données depuis C2DM Google -->
+      <intent-filter>
+        <action android:name="com.google.android.c2dm.intent.RECEIVE"/>
+            <category android:name="fr.prados.android.c2dm.demo"/>
+      </intent-filter>
+      
+      <!-- Le filtre pour recevoir l'acquittement de l'enregistrement depuis C2DM -->
+      <!-- Cela peut arriver à tous moment et plusieurs fois pour le même téléphone. -->
+      <!-- Il faut propager cet identifiant au serveur tier applicatif pour qu'il puisse envoyer des messages. -->
+      <intent-filter>
+        <action android:name="fr.prados.android.c2dm.intent.REGISTRATION"/>
+      </intent-filter>
+      
+      <!--  Idem pour C2DM Google -->
+          <intent-filter>
+            <action android:name="com.google.android.c2dm.intent.REGISTRATION"/>
+            <category android:name="fr.prados.android.c2dm.demo"/>
+          </intent-filter>
+    </receiver>
+
+
+et la classe associée :
+public class C2DMReceiver extends BroadcastReceiver
+{
+  private static final String TAG="DemoC2DM";
+  
+  private Context mContext;
+  
+  @Override
+  public void onReceive(Context context, Intent intent)
+  {
+    mContext=context;
+    if (Config.REGISTRATION.equals(intent.getAction()))
+    {
+      // Suivant le message, traite l'erreur, le désenregistrement ou l'enregistrement de l'application
+      String registrationId=intent.getStringExtra("registration_id");
+      if (intent.getStringExtra("error")!=null)
+      {
+        handleRegistrationError();
+        return;
+      }
+      if (intent.getStringExtra("unregister")!=null)
+      {
+        handleUnregistered();
+        return;
+      }
+      handleRegistration(context,registrationId);
+    }
+    else if (Config.RECEIVE.equals(intent.getAction()))
+    {
+      handleReceive(intent.getExtras());
+    }
+  }
+  // Gestion de l'enregistrement
+  // registrationId doit être propagé au serveur applicatif pour que ce dernier
+  // puisse envoyer des messages au terminal.
+  private void handleRegistration(Context context,String registrationId)
+  {
+    Log.d(TAG,"registration id="+registrationId);
+        final SharedPreferences prefs = context.getSharedPreferences(
+                Config.PREFERENCE,
+                Context.MODE_PRIVATE);
+        prefs.edit().putString("registration_id", registrationId).commit();
+    Toast.makeText(mContext, "Registered", Toast.LENGTH_LONG).show();
+  }
+  // Gestion d'erreur
+  private void handleRegistrationError()
+  {
+    Log.d(TAG,"handle registration error");
+  }
+  // Gestion du désenregistrement
+  private void handleUnregistered()
+  {
+    Log.d(TAG,"handle unregistered");
+  }
+  // Gestion de la reception d'un message.
+  // Le bundle possède un ensemble de clefs/valeurs
+  private void handleReceive(Bundle bundle)
+  {
+    String message = bundle.getString("message");
+    Toast.makeText(mContext, message, Toast.LENGTH_LONG).show();
+  }
+}
+Pour envoyer un message au terminal, il faut d'abord obtenir un ticket d'authentification de la part de google à l'aide d'un compte dédié à cet usage. Normalement, ce ticket est obtenu depuis un site Web, car cela nécessite de connaître le mot de passe du compte Gmail. Pour simplifier la démonstration, nous avons rédigé le code nécessaire pour obtenir le ticket depuis une application Android.
+Il s'agit d'envoyer une requête POST à l'URL POST_REGISTER avec plusieurs paramètres :
+* Email avec le compte à utiliser pour envoyer les messages
+* Passwd avec le mot de passe du compte
+* accoutType=GOOGLE
+* service=ac2dm
+En réponse, trois lignes sont retournées. La troisième possède une propriété Auth avec une longue valeur. C'est celle-ci qu'il faut récupérer.
+String[] responseParts = responseLine.split("=", 2);
+return responseParts[1];
+Avec la variable Auth, il est maintenant possible d'envoyer un message. Nous utilisons pour cela une nouvelle URL de type POST : POST_URL.
+L'en-tête Authorization doit avoir la valeur "GoogleLogin auth="+auth.
+Puis elle attend quatre paramètres :
+* registration_id avec l'identification du terminal cible
+* collapse_key pour signaler s'il est possible de regrouper les messages s'ils ont la même clef
+* data.<XXX> les données à transmettre dans l'Extra de l'Intent.
+* delay_while_idle la date de péremption du message.
+
+
+Nous désirons rédiger un service qui est compatible avec cette utilisation. Tous commence dans la méthode onHandleIntent qui aiguille vers les différents services.
+  // Invoqué lors des startService par les applications lors de l'enregistrement ou le désenregistrement
+  // Pour le détail de l'API voir la document de C2DM de Google.
+  @Override
+  protected void onHandleIntent(Intent intent)
+  {
+    try
+    {
+      if (REGISTER.equals(intent.getAction()))
+      {
+        String sender=intent.getStringExtra("sender");
+        PendingIntent pendingIntent=intent.getParcelableExtra("app");
+        register(pendingIntent,sender);
+      }
+      else if (UNREGISTER.equals(intent.getAction()))
+      {
+        PendingIntent pendingIntent=intent.getExtras().getParcelable("app");
+        unregister(pendingIntent);
+      }
+    }
+    catch (IOException e)
+    {
+      // Ignore
+      e.printStackTrace();
+    }
+  }
+La méthode register() doit récupérer l'Application Id de l'émetteur du message, puis déclencher l'enregistrement sur le serveur Web de notre simulateur C2DM. La requête est de type GET avec deux paramètres : l'application id et le sender id. En retour, le serveur retourne le registration id.
+  // Enregistrement d'une application pour ce téléphone.
+  // Le pendingIntent sert à connaitre l'application à l'origine de l'enregistrement.
+  // Le sender est le mail du compte applicatif sur le serveur C2DM.
+  private void register(PendingIntent pendingIntent,String sender) throws IOException
+  {
+    String applicationId=pendingIntent.getTargetPackage();
+    
+    // Soumet l'enregistrement au serveur C2DM.
+    // Deux parametres dans l'URL :
+    // - app avec l'application id,
+    // - sender avec le mail du compte.
+    URL url=new URL(C2DM_REGISTER_URL
+      +"?application_id="+URLEncoder.encode(applicationId)
+      +"&sender="+URLEncoder.encode(sender));
+    // Invocation de la requete et lecture de la réponse.
+    // Pas de gestion d'erreur pour le moment.
+    // Format attendu :
+    // - une ligne avec l'erreur eventuelle.
+    // - une ligne avec le registration id.
+    BufferedReader reader=new BufferedReader(new InputStreamReader(url.openStream()));
+    String status=reader.readLine();
+    String registration_id=reader.readLine();
+    reader.close();
+    
+    boolean error=false;
+    if (status.length()!=0)
+    {
+      error=true;    // Simulation d'une erreur
+    }
+
+
+    mListId.add(registration_id);
+    
+    // Broadcast intent aux applications.
+    // Elles doivent vérifier que le sender possède
+    // le privilège fr.prados.android.c2dm.permission.SEND
+    Intent broadcast=new Intent(REGISTRATION);
+    broadcast.putExtra("registration_id", registration_id);
+    
+    if (error)
+    {
+      broadcast.putExtra("error","true");
+    }
+//    if (unregister)
+//    {
+//      broadcast.putExtra("unregistered","true");
+//    }
+    sendBroadcast(broadcast,PERMISSION_RECEIVE);
+  }
+Celui-ci est communiqué à l'application à l'aide d'un message broadcast. Comment le service peut-il est certain que le message est destiné à une application ayant le privilège de recevoir ce type de message  ? La permission fr.prados.android.c2dm.permission.RECEIVE doit être déclarée dans l'APK du service C2DM simulator
+ <!-- La permission permettant de recevoir des évènements. -->
+  <permission
+    android:name="fr.prados.android.c2dm.permission.RECEIVE"
+    android:protectionLevel="signature"
+    />
+et utilisée dans les applications utilisant C2DM.
+<!-- Utilise la permission de recevoir des messages depuis C2DM →
+<uses-permission android:name="fr.prados.android.c2dm.permission.RECEIVE"/>
+Inversement, pour être certain que l'acquittement de l'enregistrement vient bien du service C2DM, il faut ajouter une contrainte de sécurité pour le receveur de messages broadcast.
+<receiver
+ android:name="fr.prados.android.c2dm.demo.C2DMReceiver"
+ android:permission="fr.prados.android.c2dm.permission.SEND"
+>
+Ainsi, l'émission et la réception des messages sont sécurisées.
+Une fois le service enregistré, il faut normalement maintenir un socket ouvert pour chaque terminal, et l'utiliser dès qu'un message est disponible. Ce canal de communication sert à pusher les messages sur le téléphone. Plusieurs techniques sont possibles pour cela, de l'utilisation du protocole Jabber, à l'utilisation de Comet.
+Pour simplifier, nous allons utiliser une approche de type Pooling, plus simple pour cet article. Périodiquement, nous vérifions s'il n'existe pas de message disponible. Attention, cette approche ne doit pas être utilisé sur un vrai téléphone ! Cela ruinerait la batterie.
+  // Le service de pooling pour vérifier la présence de nouveaux messages
+  class C2DMPooling implements Runnable
+  {
+    // La période de consultation.
+    private static final int TIME_PERIOD=30000; // 30 secondes
+    public void run()
+    {
+      for (;;)
+      {
+        try
+        {
+          synchronized (this)
+          {
+            wait(TIME_PERIOD);
+            poolMessages();
+          }
+        }
+        catch (Exception e)
+        {
+          // Ignore
+        }
+      }
+    }
+  }
+Lorsqu'un message est disponible, il est transmis aux applications.
+  // Service invoqué périodiquement pour vérifier la présence de nouveaux messages.
+  // Cette approche est très mauvaise pour une utilisation en mobilité.
+  // Mais permet de présenter un code court pour un article.
+  private synchronized void poolMessages() throws IOException
+  {
+    Log.d(TAG,"pool Messages");
+    for (String id:mListId)
+    {
+      Intent broadcast=new Intent(RECEIVE);
+      // Format de l'URL: un paramètre registration_id avec la chaine récupéré lors d'un enregistrement
+      URL url=new URL(C2DM_POOL_URL+"?registration_id="+URLEncoder.encode(id));
+      // Réponse attendu:
+      // La première ligne avec l'application ID associé
+      // Les lignes suivantes au format key;valeur
+      BufferedReader reader=new BufferedReader(new InputStreamReader(url.openStream()));
+      String line=null;
+      boolean first=true;
+      String applicationId=null;
+      while ((line=reader.readLine())!=null)
+      {
+        if (first)
+        {
+          first=false;
+          applicationId=line;
+        }
+        else
+        {
+          int idx=line.indexOf('=');
+          if (idx==-1) break;
+          String key=line.substring(0,idx);
+          String value=line.substring(idx+1);
+          broadcast.putExtra(key, value);
+        }
+      }
+      reader.close();
+      // Si l'analyse de la réponse est conforme,
+      if ((applicationId!=null) && broadcast.getExtras()!=null && !broadcast.getExtras().isEmpty())
+      {
+        // Broadcast le message aux destinataires ayant le privilège
+        // applicationId+".permission.C2DM_MESSAGE"
+        sendBroadcast(broadcast,applicationId+".permission.C2D_MESSAGE");
+      }
+    }
+  }
+Comment être certain d'envoyer les messages aux bonnes applications ? Par convention, C2DM impose que le destinataire des messages possède une permission dont le nom commence par le nom du package, suivit de .permission.C2D_MESSAGE. Il faut donc déclarer cette permission dans l'application, l'associer à la signature pour être le seul à pouvoir l'obtenir et l'utiliser.
+<!-- Utilise la permission de recevoir des messages depuis C2DM -->
+<permission
+ android:name="fr.prados.android.c2dm.demo.permission.C2D_MESSAGE"
+ android:protectionLevel="signature" />
+<uses-permission
+ android:name="fr.prados.android.c2dm.demo.permission.C2D_MESSAGE" />
+Nous avons rapidement simuler le service C2DM de Google, avec une implémentation compatible, au préfixe des indicateurs prêts.
+Il reste à rédiger le serveur Web étant capable de répondre aux URL suivante :
+* C2DM_REGISTER_URL avec les paramètres application_id et sender. Elle doit retourner un status et un identifiant unique pour le téléphone ;
+* C2DM_POOL_URL avec le paramètre registration_id. Elle doit retourner l'application_id et un ensemble de clef/valeur.
+* C2DM_POST_URL avec les différents paramètres pour construire un message à destination d'un terminal.
+* C2DM_POST_REGISTER pour obtenir le droit d’émettre des messages.
+Ces services peuvent être codés en Java, PHP, peu importe. Nous proposons une implémentation rapide avec une application Web codée en Java. Le serveur Web est à lancer sur le poste du développeur, pour pouvoir être accessible par 10.0.2.2:8888 depuis un émulateur Android.
+Nous constatons que l'API est protégée contre différentes attaques :
+* Il est possible de capturer le session id associé à une application, mais impossible de l'utiliser sans connaître le mot de passe du sender Id.
+* Une autre application ne peut simuler un message REGISTRATION
+* Impossible de capturer les messages destinés aux autres applications
+Voici une nouvelle brique pour notre place de marché. Bien entendu, la communication PUSH ne peut utiliser un mécanisme de pooling, si les messages ont une certaine urgence. Elle peut être utilisée pour recevoir des notifications de mise à jour des applications, et pour compenser l'absence des services de Google. Nous avons une coquille à compléter pour offrir un service de PUSH plus conséquent. Tous les sources sont disponibles sur mon site : www.prados.fr.
+Philippe PRADOS article@prados.fr
+Architecte Senior, AtoS

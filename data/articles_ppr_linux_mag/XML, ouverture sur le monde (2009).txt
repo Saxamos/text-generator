@@ -1,0 +1,927 @@
+﻿XML, ouverture sur le monde
+  
+
+Les projets Open Source s'intègrent les uns aux autres. Petit à petit, les briques font des murs puis des maisons et des villes. Comment concevoir une application avec le maximum d'ouverture ? Comment faciliter l'intégration ? Afin d'étudier les différentes évolutions permettant d'ouvrir au maximum le code, nous allons prendre l'exemple d'un composant manipulant un fichier XML. Nous allons l'ouvrir progressivement au monde. Puis, nous étudierons comment faire évoluer la notion de fichier de propriétés. En combinant ces deux approches, cela nous ouvrira de nombreuses portes, comme l'intégration de fichier OpenDocument, sans API spécifique et à l'insu des programmes.
+Par Philippe PRADOS - 2009
+www.prados.fr
+Les projets Open Source tirent leurs qualités de leurs capacités à s'intégrer les uns aux autres. Par exemple, un projet comme Maven ( http://maven.apache.org ) n'aurait pas le même succès sans l'intégration d'autres projets Opens Sources.
+Il est important, lors de la réalisation d'un outil, d'un composant ou d'une simple API, de faire des choix le plus ouverts possibles. Personne ne sait comment sera utilisé votre code. Si vous fermez des portes, des possibilités d'intégrations, celui-ci n'aura pas le succès escompté. Regardez le succès des projets de « Mashup » pour vous en convaincre. Il est important d'avoir toujours à l'esprit les différentes pistes permettant d'utiliser le composant en dehors de ce pour quoi il est fait.
+Lecture d'un fichier XML
+Nous allons réfléchir à une évolution d'un code banal, rédigé sans recherche particulière d'ouverture. Nous allons l'ouvrir progressivement à de nombreuses opportunités d'évolutions. Les modifications seront de surface, et auront peu d'impact sur les traitements.
+Le code initial
+Pour la démonstration, imaginons un programme Java qui analyse un fichier XML. Le programme a besoin de connaître le nom du fichier à analyser. Peu importe ce qu'il en fait. Ce que nous savons, est qu'il analyse un fichier répondant à une syntaxe particulière.
+<?xml version="1.0" encoding="UTF-8" ?>
+<configurations>
+ <item name="user">me</item>
+ <item name="password">sesame</item>
+</configurations>
+Notre programme souhaite analyser un fichier. Il prend en paramètre le nom du fichier. Celui peut venir d'un paramètre de la ligne de commande, d'un paramètre dans un fichier quelconque, récupéré dans une base de données ou un arbre JNDI, saisie par l'utilisateur, etc. Le code ressemble à celui-ci :
+public class MonOutil
+{
+  public static final DocumentBuilderFactory factory;
+
+
+  static
+  {
+    factory=DocumentBuilderFactory.newInstance();
+  }
+  
+  public static void main(String[] args)
+    throws SAXException, IOException, ParserConfigurationException
+  {
+    final File filename=new File(args[0]);
+    // Get document
+    final Document jndiparams = factory.newDocumentBuilder().parse(filename);
+    // Use XML data
+    System.out.println("Process"+filename);
+    // Get head
+    final Node head=jndiparams.getFirstChild();
+    final NodeList childs=head.getChildNodes();
+    for (int i=0;i<childs.getLength();++i)
+    {
+      Node node=childs.item(i);
+      if (node.getNodeType()!=Node.ELEMENT_NODE) continue;
+      System.out.println(node.getAttributes()
+         .getNamedItem("name").getNodeValue()+"="
+         +node.getTextContent());
+    }
+    System.out.println();
+  }
+}
+Ouverture vers le monde
+La première évolution que nous pouvons faire est d'accepter autre chose qu'un nom de fichier. En effet, pourquoi ne pas accepter une URL ? Cela permet de nombreuses ouvertures. L'utilisateur ou l'intégrateur peut alors récupérer le fichier XML à partir d'un fichier, d'Internet, d'un serveur Ftp, etc.
+Très bien. Mais l'utilisation risque d'être compliquée. Il n'est pas évident de convertir un nom de fichier en URL. L'utilisateur qui invoque facilement
+MonOutil param/conf.xml
+ne souhaite pas utiliser
+MonOutil file:///home/pprados/param/conf.xml.
+Nous allons utiliser une astuce, pour accepter des URLs complètes ou des fragments d'URLs. Dans ce cas, le programme considère qu'il s'agit d'une URL de type fichier. Le code évolue alors ainsi :
+public class MonOutil
+{
+  public static final DocumentBuilderFactory factory;
+  static
+  {
+    factory=DocumentBuilderFactory.newInstance();
+  }
+  
+  public static void main(String[] args) 
+    throws SAXException, IOException, ParserConfigurationException
+  {
+    // Get filename
+    final File filename=new File(args[0]);
+    final URL filename = nameToURL(args[0]);
+  
+    // Get document
+    final Document jndiparams = factory.newDocumentBuilder().parse(filename);
+    final InputStream in=filename.openStream();
+    final Document jndiparams;
+    try
+    {
+      jndiparams = factory.newDocumentBuilder().parse(in);
+    }
+    finally
+    {
+      in.close();
+    }
+
+
+    // Use XML data
+    ...
+  }
+  private static URL nameToURL(String name) throws MalformedURLException
+  {
+    try
+    {
+      return new URL(name);
+    }
+    catch (MalformedURLException x)
+    {
+      return new File(name).toURI().toURL();
+    }
+  }
+}
+Il est maintenant possible d'exploiter l'utilitaire avec des URLs ou des noms de fichiers.
+Lors d'une intégration dans Eclipse par exemple, il sera possible d'utiliser les ressources de l'espace de travail. En effet, dans ce contexte, il existe un protocole d'URL dénommé resource:.
+Si l'intégrateur désire travailler en mémoire, il doit proposer un protocole d'URL de type mem:. Tout est possible si on ajoute simplement de nouveaux protocoles pour les URL.
+Java offre un type d'URL sympathique, avec le protocole jar:. Ce protocole permet de manipuler le contenu d'une archive au format ZIP. La syntaxe est la suivante : jar:<url>!<fichier dans l'url>
+Il est alors possible de retrouver un fichier XML dans une archive. Par exemple :
+MonOutil jar:file:MonApp.war!/META-INF/conf.xml
+Il est possible de raffiner encore. La deuxième partie étant elle même une URL, il est facile d'extraire le fichier XML d'une ressource récupérée sur le réseau.
+MonOutil jar:http://www.monsite.org/MonApp.war!/META-INF/conf.xml
+Voici déjà un début d'ouverture, en modifiant quelques lignes de code.
+Vérification de la syntaxe
+XML est un langage particulier par rapport aux approches binaires précédentes. Il apporte plusieurs innovations :
+* Il est manipulable par des humains (format texte)
+* Il est arborescent (contrairement aux classiques clef/valeur comme les fichiers .properties ou .ini)
+* La syntaxe est évolutive (un programme doit ignorer les tags et les attributs qu'il ne connaît pas)
+Les fondamentaux d'XML permettent l'intégration d'une syntaxe avec une autre. Comme il y a un risque de collisions dans les marqueurs lors de l'intégration des syntaxes, XML propose d'utiliser des espaces de noms. Cela correspond à la notion de package en Java.
+Nous allons commencer par créer un espace de nom. Il faut choisir une URL pour l'identifier. Par exemple : http://xsd.prados.fr/xsd/MonOutil/1.0/. La syntaxe est alors décrite dans un fichier XSD.
+<?xml version="1.0" encoding="UTF-8"?>
+<schema xmlns="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="http://xsd.prados.fr/xsd/MonOutil/1.0/"
+  xmlns:tns="http://xsd.prados.fr/xsd/MonOutil/1.0/"
+  elementFormDefault="qualified"
+  attributeFormDefault="unqualified">
+ <element name="configurations">
+   <complexType>
+     <sequence minOccurs="1" maxOccurs="unbounded">
+       <element ref="tns:item" />
+     </sequence>
+     <anyAttribute processContents="strict" />
+   </complexType>
+ </element>
+ <element name="item">
+   <complexType>
+     <simpleContent>
+       <extension base="string">
+         <attribute name="name" type="string" />
+       </extension>
+     </simpleContent>
+   </complexType>
+ </element>
+</schema>
+Maintenant, il faut modifier légèrement les fichiers XML pour demander d'utiliser l'espace de noms ainsi créé.
+<?xml version="1.0" encoding="UTF-8" ?>
+<configurations 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://xsd.prados.fr/xsd/MonOutil/1.0/ MonOutil.xsd"
+  xmlns="http://xsd.prados.fr/xsd/MonOutil/1.0/"
+>
+  <item name="user">me</item>
+  <item name="password">sesame</item>
+</configurations>
+Le code d'analyse de la syntaxe est très légèrement différent.
+public class MonOutil
+{
+  public static final DocumentBuilderFactory factory;
+
+
+  static
+  {
+    factory=DocumentBuilderFactory.newInstance();
+    factory.setNamespaceAware(true);
+    factory.setValidating(true);
+    factory.setAttribute(
+      "http://java.sun.com/xml/jaxp/properties/schemaLanguage",
+      "http://www.w3.org/2001/XMLSchema");
+  }
+  
+  public static void main(String[] args) 
+    throws SAXException, IOException, ParserConfigurationException
+  {
+    // Get filename
+    final URL filename = nameToURL(args[0]);
+   
+    // Get document
+    final InputStream in=filename.openStream();
+    final Document jndiparams;
+    try
+    {
+      jndiparams = factory.newDocumentBuilder().parse(in);
+    }
+    finally
+    {
+      in.close();
+    }
+    
+    // Use XML data
+    System.out.println("Process"+filename);
+   
+    // Get head
+    final Node head=jndiparams.getFirstChild();
+    final NodeList childs=head.getChildNodes();
+    for (int i=0;i<childs.getLength();++i)
+    {
+      Node node=childs.item(i);
+      if (node.getNodeType()!=Node.ELEMENT_NODE) continue;
+      if (node.getNamespaceURI()!=
+        "http://xsd.prados.fr/xsd/MonOutil/1.0/") continue;
+      System.out.println(node.getAttributes()
+        .getNamedItem("name").getNodeValue()+"="
+        +node.getTextContent());
+    }
+    System.out.println();
+  }
+  ...
+}
+Si nous souhaitons faciliter la création du fichier XML, il est préférable de publier la syntaxe sur le réseau. Ainsi, les éditeurs XML peuvent la vérifier. La syntaxe du fichier de configuration devient alors :
+<?xml version="1.0" encoding="UTF-8" ?>
+<configurations
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation=
+"http://xsd.prados.fr/xsd/MonOutil/1.0/ http://xsd.prados.fr/xsd/1.0/MonOutil.xsd"
+  xmlns="http://xsd.prados.fr/xsd/MonOutil/1.0/">
+  <item name="user">me</item>
+  <item name="password">sesame</item>
+</configurations>
+Il est maintenant possible d'utiliser n'importe quel éditeur XML pour créer le fichier. La syntaxe est vérifiable en dehors du composant. C'est une nouvelle ouverture vers le monde.
+Ouverture de la syntaxe
+Comme décrit précédemment, XML permet d'enrichir la syntaxe. Il est envisageable d'ajouter de nouveaux marqueurs dans le fichier ; marqueurs qui devront être ignorés par le programme mais qui peuvent avoir une utilité lors d'une intégration.
+Par exemple, il doit être possible d'ajouter des attributs à nos marqueurs. Cela peut servir à identifier un nœud particulier à l'aide d'un id XML, d'ajouter des commentaires, des informations de langue à l'aide de xml:lang, des méta-informations, etc.
+Pour cela, nous devons revoir la syntaxe pour être moins rigide et accepter certaines évolutions. La première chose à faire est d'ajouter un attribut id optionnel pour chaque nœud.
+<attribute name="id" type="ID" use="optional"/>
+Ensuite, tolérons des attributs complémentaires à condition qu'ils utilisent un autre espace de nom.
+<anyAttribute processContents="lax" namespace="##other" />
+Pour accepter l'insertion de marqueurs complémentaires, il faut modifier les <sequence/> par des <choice/>. Cela permet d'accepter de nouveaux marqueurs à n'importe quelle position. On peut alors accepter de nouveaux marqueurs devant respecter strictement une syntaxe ( processContents="strict" ) ou au contraire, plus lâche ( processContents="lax" ).
+La nouvelle syntaxe est la suivante :
+<?xml version="1.0" encoding="UTF-8"?>
+<schema xmlns="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="http://xsd.prados.fr/xsd/MonOutil/1.0/"
+  xmlns:tns="http://xsd.prados.fr/xsd/MonOutil/1.0/"
+  elementFormDefault="qualified"
+  attributeFormDefault="unqualified">
+  <element name="configurations">
+    <complexType>
+     <sequence minOccurs="1" maxOccurs="unbounded">
+     <choice minOccurs="1" maxOccurs="unbounded">
+       <element ref="tns:item" />
+       <any processContents="lax" namespace="##other" />
+     </choice>
+     </sequence>
+     <attribute name="id" type="ID" use="optional"/>
+     <anyAttribute processContents="lax" namespace="##other" />
+    </complexType>
+  </element>
+  <element name="item">
+    <complexType>
+      <simpleContent>
+        <extension base="string">
+         <attribute name="id" type="ID" use="optional"/>
+         <attribute name="name" type="string" />
+         <anyAttribute processContents="lax" namespace="##other"/>
+       </extension>
+     </simpleContent>
+   </complexType>
+ </element>
+</schema>
+Il est maintenant possible d'enrichir le fichier de configuration, à condition d'utiliser un espace de nom complémentaire pour les nouveaux marqueurs.
+<?xml version="1.0" encoding="UTF-8" ?>
+<configurations
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation=
+    "http://xsd.prados.fr/xsd/MonOutil/1.0/
+    http://xsd.prados.fr/xsd/1.0/MonOutil.xsd"
+  xmlns:ext="http://www.integrateur.fr/xsd/MesAjouts/1.0/"
+  xmlns="http://xsd.prados.fr/xsd/MonOutil/1.0/"
+  id="root"
+>
+  <ext:comment xml:lang="fr">Utilisateur par défaut</ext:comment>
+  <item name="user" xml:lang="fr" id="nom">me</item>
+  <item name="password">sesame</item>
+</configurations>
+D'autres outils peuvent alors exploiter la syntaxe et l'enrichir de méta-informations si nécessaire. D'autres fichiers XML peuvent faire référence au nom de l'utilisateur. Il suffit de le référencer à l'aide de conf.xml#nom.
+Intégration de la syntaxe
+L'intégration peut être plus profonde. Un fichier XML peut contenir plusieurs extraits de la syntaxe de l'outil. Par exemple, un outil souhaite réunir toutes les configurations des composants et y ajouter d'autres informations. Il peut souhaiter utiliser un fichier de ce type.
+<?xml version="1.0" encoding="UTF-8"?>
+<nodes
+  xmlns="http://www.integrator.org"
+  xmlns:conf="http://xsd.prados.fr/xsd/MonOutil/1.0/"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation=
+   "http://www.integrator.org Nodes.xsd">
+   <node name="jmshost">
+   <conf:configurations id="jms">
+     <conf:item name="user">me</conf:item>
+     <conf:item name="password">sesame</conf:item>
+   </conf:configurations>
+ </node>
+ <node name="dbhost">
+   <conf:configurations id="db">
+     <conf:item name="user">dba</conf:item>
+     <conf:item name="password">sesame</conf:item>
+   </conf:configurations>
+ </node>
+</nodes>
+Notez qu'il y a dans ce fichier, plusieurs marqueurs de type <configuration/>. Pour lever les ambiguïté, l'espace de nom utilise l'alias conf:. Le programme n'est pas prévu pour cela. C'est normalement l'unique marqueur racine !
+La syntaxe de l'intégrateur ré-utilise la syntaxe de MonOutil. C'est un des objectifs de la création des espaces de noms de XML. Il est naturel de retrouver ces combinaisons. La syntaxe de ce nouveau format d'intégration est une combinaison d'une nouvelle syntaxe et de la syntaxe de l'outil.
+<?xml version="1.0" encoding="UTF-8"?>
+<schema
+  targetNamespace="http://www.integrator.org"
+  elementFormDefault="qualified"
+  attributeFormDefault="unqualified"
+  xmlns="http://www.w3.org/2001/XMLSchema" 
+  xmlns:conf="http://xsd.prados.fr/xsd/MonOutil/1.0/"
+>
+  <import namespace="http://xsd.prados.fr/xsd/MonOutil/1.0/"
+    schemaLocation="http://xsd.prados.fr/xsd/1.0/MonOutil.xsd"/>
+  <element name="nodes">
+     <complexType>
+        <sequence maxOccurs="unbounded">
+           <element name="node">
+              <complexType>
+                 <sequence>
+                    <element ref="conf:configurations"/>
+                 </sequence>       
+         <attribute name="name" type="ID" use="required"/>
+              </complexType>
+           </element>
+        </sequence>
+     </complexType>
+  </element>
+</schema>
+Mais voilà, notre programme ne sait pas gérer cette situation. L'URL qu'il reçoit en paramètre lui permet d'identifier le fichier à analyser. Le programme part de l'hypothèse que le nœud XML racine est du type <configurations/>. Ce n'est plus le cas avec le fichier de l'intégrateur. Le nœud racine est du type <nodes/>. De plus, il n'est pas possible de sélectionner automatiquement le marqueur <configurations/> puisqu'il en existe plusieurs.
+L'intégrateur peut alors écrire un filtre XSL pour extraire les marqueurs spécifiques à notre utilitaire. Il produit un fichier temporaire, extrait de son fichier plus riche, et invoque MonOutil. Ces processus sont complexes et pas très intégrés. Il existe pourtant une approche simple, que nous devons ajouter dans notre code.
+Recevant une URL, nous bénéficions des signets à l'intérieur du document. Ajoutons à notre code le nécessaire pour recevoir une URL sous la forme .../nodes.xml#jms. Si le signet n'est pas présent, nous prenons la racine du fichier. S'il est présent, nous partons du nœud identifié.
+public class MonOutil
+{
+  public static final DocumentBuilderFactory factory;
+  static
+  {
+    factory=DocumentBuilderFactory.newInstance();
+    factory.setNamespaceAware(true);
+    factory.setValidating(true);
+    factory.setAttribute(
+      "http://java.sun.com/xml/jaxp/properties/schemaLanguage",
+      "http://www.w3.org/2001/XMLSchema");
+
+
+ }
+  private static final String namespace="http://xsd.prados.fr/xsd/MonOutil/1.0/";
+  public static void main(String[] args) 
+    throws SAXException, IOException, ParserConfigurationException,
+           URISyntaxException
+  {
+    // Get filename
+    final URL filename = nameToURL(args[0]);
+    // Get document
+    ...
+    // Use XML data
+    System.out.println("Process "+filename);
+    // Get head
+   final Node head=jndiparams.getFirstChild();
+   final Node head=(null==filename.getRef())
+      ? jndiparams.getFirstChild()
+      : jndiparams.getElementById(filename.getRef());
+   
+    final NodeList childs=head.getChildNodes();
+    for (int i=0;i<childs.getLength();++i)
+    {
+      Node node=childs.item(i);
+      if (node.getNodeType()!=Node.ELEMENT_NODE) continue;
+      if (node.getNamespaceURI()!=namespace) continue;
+      System.out.println(node.getAttributes().
+        getNamedItem("name").getNodeValue()+"="
+        +node.getTextContent());
+    }
+    System.out.println();
+  }
+
+
+  private static URL nameToURL(String name) throws MalformedURLException
+  {
+    try
+    {
+      return new URL(name);
+    }
+    catch (MalformedURLException x)
+    {
+      final int idx=name.indexOf('#');
+      if (idx!=-1)
+        return new URL(
+          new File(name.substring(0,idx)).toURI()
+           .toASCIIString()+name.substring(idx));
+      else
+        return new File(name).toURI().toURL();
+    }
+  }
+}
+Pour cela, il faut que notre syntaxe accepte un id XML sur tous les nœuds racine. Il est indispensable de vérifier la syntaxe ( setValidating(true) ) pour bénéficier de la méthode getElementById(), car cette méthode consulte une méta-information des attributs ; information disponible qu'après analyse de la syntaxe. Si vous ne souhaitez pas vérifier la syntaxe par le processeur XML, faîte une recherche de signet à la main.
+Ainsi, nous ne travaillons plus à partir d'un fichier comme dans la première version, mais à partir d'une URL identifiant un nœud XML quelque part sur la planète. Nous avons fait évoluer la sémantique initiale afin de s'ouvrir au monde.
+Quel est l'impact sur le code ?
+Il est légèrement plus complexe. Il doit travailler à partir d'une URL, éventuellement d'un signet de nœud et utiliser un espace de nom. Ce n'est vraiment pas grand chose pour ouvrir tant de portes.
+L'exemple juste en dessous mélange toutes ces ouvertures. Il utilise l'utilitaire avec un extrait XML intégré dans une syntaxe plus riche, dont le fichier est présentée sur le réseau dans une archive compressée.
+MonOutil jar:http://www.monsite.org/Plateform.zip!/nodes.xml#jms
+Nous sommes très loin de la simple lecture d'un fichier. Ce n'est pas terminé. Nous allons encore enrichir cela.
+Les propriétés
+Pour lire un fichier de propriétés, le code traditionnel est le suivant :
+// Get properties filename
+final String propfilename=args[0];
+final Properties prop=new Properties();
+{
+  InputStream in=null;
+  try
+  {
+    in=new BufferedInputStream(new FileInputStream(propfilename));
+    prop.load(in);
+  } 
+  finally
+  {
+    if (in!=null) in.close();
+  }
+}
+Comme pour les fichiers XML, il est préférable d'utiliser une URL pour référencer le fichier. Cela ouvre les possibilités que nous avons vues précédemment.
+// Get properties filename
+final String propfilename=args[0];
+URL propfilename;
+try
+{
+  propfilename = new URL(args[0]);
+}
+catch (MalformedURLException x)
+{
+  propfilename = new File(args[0]).toURI().toURL();
+}
+
+
+// Load properties
+Properties prop=new Properties();
+{
+  InputStream in=null;
+  try
+  {
+    in=new BufferedInputStream(new FileInputStream(propfilename));
+    in=new BufferedInputStream(propfilename.openStream());
+    prop.load(in);
+  }
+  finally
+  {
+    if (in!=null) in.close();
+ }
+}
+Ainsi, les propriétés peuvent être présentes dans un fichier, dans une archive ou à distance sur un serveur FTP(S) ou HTTP(S).
+Les API de Java proposent également de décrire les propriétés dans un fichier XML. La méthode Properties.loadFromXML() se charge de cela. Nous pouvons enrichir notre code pour accepter cette syntaxe.
+// Load properties
+Properties prop=new Properties();
+{
+  InputStream in=null;
+  try
+  {
+    in=new BufferedInputStream(propfilename.openStream());
+    if (propfilename.getPath().endsWith(".xml"))
+      prop.loadFromXML(in);
+    else
+      prop.load(in);
+  }
+  finally
+  {
+    if (in!=null) in.close();
+  }
+}
+Le fichier de propriétés peut maintenant être au format XML, à condition d'avoir l'extension correspondante.
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties version="1.0">
+  <entry key="user">aladin</entry>
+  <entry key="password">sesame</entry>
+</properties>
+Utilisez les propriétés comme variables
+Les fichiers XML permettent de structurer des informations, de les combiner comme nous venons de le voir. Mais, souvent, nous souhaitons simplement utiliser des variables pour adapter la structure exprimée dans les fichiers XML. Par exemple, il est souvent nécessaire de partager des informations entre différents fichiers XML. On peut dupliquer l'information, mais il est préférable d'utiliser des variables dans les différents fichiers XML, et de les valoriser à l'aide de propriétés. Il est également souvent nécessaire d'avoir des informations dans les fichiers XML qui dépendent du contexte d'exécution (nom de machine, répertoire d'installation, etc.) Les variables permettent alors d'externaliser quelques informations, sans devoir rédiger de fichier XML pour chaque situation.
+Log4j utilise cette approche pour intégrer les paramètres d'environnement Java (System.getEnv()). JBoss utilise également une approche similaire pour identifier les répertoires d'installations. Ainsi, une simple recopie de répertoire permet de dupliquer une session.
+Les fichiers de propriétés peuvent être judicieusement combinées aux fichiers XML. Pour les variables, utilisons la syntaxe devenue un grand classique sous java : ${...}
+Nous souhaitons pouvoir utiliser ces variables dans tous les fichiers XML (voir dans tous les fichiers textes). Il existe plusieurs approches : faire les conversions dans le code, lors de l'exploitation des valeurs des attributs XML ou faire la conversion directement lors de la lecture du flux. La première approche est plus simple à coder, mais présente plusieurs inconvénients :
+* il n'est pas possible d'avoir des extraits XML dans le contenu des variables ;
+* il y a un risque d'oublier certaines attributs : si le code ne cherche pas à convertir systématiquement chaque attribut récupéré de la syntaxe XML, les variables ne sont pas utilisables partout.
+Par exemple, l'extrait de code suivant :
+String name=conv_var(node.getAttributes().getNamedItem("name").getNodeValue());
+String password=node.getAttributes().getNamedItem("password").getNodeValue();
+ne permet pas d'utiliser une variable pour l'attribut password. En effet, le développeur a oublié de convertir cet attribut. C'est un bug difficile à identifier. C'est pourtant l'approche utilisé par JBoss pour analyser ses fichiers de paramètres.
+Il est préférable d'écrire un filtre qui s'occupera de modifier le flux à la volée. Ce filtre est initialisé avec une liste de propriétés. Lorsque le filtre rencontre une variable, il la remplace par la valeur présente dans la liste des propriétés.
+Une variable peut être incluse dans une autre. Par exemple, ${password.${host}}. Le code doit convertir en premier, la variable la plus incluse ${host}, puis la variable externe dont le nom dépend de la valorisation de la variable interne. Par exemple, avec les propriétés suivante : host=localhost ; password.localhost=root ; password.database=dba , la conversion doit produire la valeur « root ».
+Le code du filtre est présent en annexe.
+Il est alors facile de modifier le code de lecture du fichier XML, pour intégrer la conversion à la volée des variables.
+// Get document
+final InputStream in=filename.openStream();
+final Document jndiparams;
+try
+{
+  jndiparams = factory.newDocumentBuilder().parse(in);
+  jndiparams = factory.newDocumentBuilder().parse(
+    new InputSource(new VariableReader(new InputStreamReader(in),prop)));
+}
+finally
+{
+  in.close();
+}
+Une seule ligne a été modifiée ! La classe VariableReader est un Reader s'occupant de convertir les variables à la volée. Le code manipule un tampon pour y stocker le flux transformé. Si une variable est modifiée entre deux lectures de tampon, il s'occupe de synchroniser tout cela en ajustant, si nécessaire, la taille du tampon, afin d'y stocker le flux sans les variables.
+Nous avons ainsi marié les propriétés et les flux XML.
+L'instance prop peut être initialisée avec les variables systèmes par exemple.
+prop=System.getProperties();
+Ainsi, toutes les variables systèmes sont disponibles dans les fichiers XML. Ce Reader est utilisable pour tous les fichiers textes. Vous pouvez l'utiliser pour la lecture des propriétés par exemple.
+Initialiser les propriétés
+Nous avons maintenant la possibilité d'enrichir une syntaxe XML à l'aide d'un fichier de propriétés. La ligne de commande peut également être enrichie pour accepter la syntaxe classique  -D <name>=<value> ou  -P <url>.
+Les fichiers de propriétés peuvent également être liés entre eux. Il suffit de convenir qu'en cas de présence d'une propriété de nom include, il faut charger également le fichier référencé. Ainsi, les propriétés peuvent être réparties dans différents fichiers.
+Des propriétés XPath
+Nous pouvons utiliser les propriétés dans les flux XML à l'aide des variables.
+Nous souhaitons également faire l'inverse : initialiser une propriété à l'aide d'un flux XML. Cela permet d'initialiser une propriété avec une donnée présente dans un autre fichier XML. Il suffit de convenir d'une syntaxe spécifique pour déclarer les propriétés à l'aide de requête Xpath.
+<key>=xpath:[xmlns:<namespace>="<uri>",]document(<url>)<xpath>
+Si la valeur d'une clef est préfixée de xpath:, il est nécessaire d'ouvrir le document indiqué et d'appliquer l'expression XPath correspondante.
+Par exemple, le fichier de propriété suivant permet d'extraire une valeur d'un fichier XML.
+# Propriétés Xpath et "normale"
+nom=xpath:document('nodes.xml') \
+  /conf:configurations[0]/conf:items[@name='user] password=MonMotDePasse
+Les espaces de noms utilisables dans la requête XPath correspondent aux alias présents dans le fichier. conf: fait donc référence à l'espace de noms http://xsd.prados.fr/xsd/MonOutil/1.0/
+C'est plus complexe lorsque le fichier XML utilise un espace de nom par défaut, sans alias. Il faut alors ajouter un alias. Par exemple :
+user=xpath:xmlns:xhtml="http://www.w3.org/1999/xhtml",\
+  document('http://www.prados.fr')//xhtml:html/xhtml:head/xhtml:meta[@name='Author']/@content
+Cette version extrait le nom de l'auteur de la page XHTML présente en http://www.prados.fr pour valoriser la propriétés user.
+Vous pouvez également interroger des services Web 2.0 de type REST, des flux RSS, etc. Il suffit de demander une réponse au format XML.
+Pour faire cela, la classe ExtendedProperties en annexe propose une extension pour l'initialisation des propriétés. Elle s'occupe des includes éventuels et des syntaxes XPath.
+ExtendedProperties.load(urlProp,props);
+Combinaisons avec OpenOffice.org
+En combinant tous cela, il est possible d'aller très loin. Voici, par exemple, une utilisation inattendue. Vous avez un fichier OpenDocument de type tableur. Vous pouvez remplir les différentes valeurs avec OpenOffice.org.
+
+
+  
+
+Les fichiers d'extension ODS sont des fichiers ZIP contenant des fichiers XML. C'est exactement ce que nous manipulons depuis le début de cet article. Il est donc possible d'extraire la valeur d'une cellule dans un fichier de propriétés. Supposons que le nom et le mot de passe de l'utilisateur soient présents en cellules un et deux de la deuxième ligne du fichier tableur.ods. Voici ce que cela peut donner pour le fichier context.properties.
+user=xpath:document('jar:file:tableur.ods!/content.xml') \
+  //table:table/table:table-row[2]/table:table-cell[1]
+password=xpath:document('jar:file:tableur.ods!/content.xml') \
+  //table:table/table:table-row[2]/table:table-cell[2]
+Nous utilisons une URL de type jar:, puis nous référençons le fichier ODS à l'aide d'une URL de type file:. Ensuite, dans cette archive, nous sélectionnons le fichier content.xml. Il reste à rédiger une requête XPath pour sélectionner une cellule puis l'autre.
+Maintenant, notre fichier XML peut être initialisé à l'aide de variables, elles mêmes valorisées par l'extraction de cellules du fichier ODS.
+<?xml version="1.0" encoding="UTF-8"?>
+<nodes
+  xmlns="http://www.integrator.org"
+  xmlns:conf="http://xsd.prados.fr/xsd/MonOutil/1.0/"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.integrator.org Nodes.xsd">
+  <node name="jmshost">
+    <conf:configurations id="jms">
+     <conf:item name="user">${user}</conf:item>
+     <conf:item name="password">${password}</conf:item>
+    </conf:configurations>
+  </node>
+</nodes>
+La symphonie en mouvement
+Nous pouvons exécuter l'outil en lui fournissant d'une part l'URL du fichier XML enrichi d'un signet, et d'autre part l'URL du fichier de propriétés.
+MonOutil nodes.xml#jms context.properties
+Nous pouvons déclarer les propriétés à l'aide d'un fichier XML, lui-même inclus dans une archive.
+MonOutil nodes.xml#jms jar:file:archive.zip!context.xml
+La boucle est bouclée. Peu importe le rôle de l'utilitaire, il souhaite manipuler un fichier XML. Avec quelques classes bien choisies, et en combinant judicieusement toutes les fonctionnalités de ces technologies, nous pouvons ouvrir bien des portes.
+La communauté Open Source se chargera de transcender notre composant pour l'intégrer dans d'autres outils pour des usages inattendus.
+Le code n'est pas beaucoup plus complexe que la version initiale. Pourquoi s'en priver ? Nous sommes intervenus essentiellement dans l'ouverture du flux, pas dans l'interprétation de la syntaxe XML.
+Les deux classes nécessaires sont présentes en annexe. Vous y trouverez le filtre permettant la conversion à la volée des variables (VariableReader) et une classe utilitaire permettant d'étendre les fonctionnalités des fichiers de propriétés (ExtendedProperties). Tous les sources sont présents sur mon site www.prados.fr.
+Nous sommes partis de la simple lecture d'un fichier XML pour arriver à l'analyse d'un nœud XML présent dans une ressource quelque part dans ce monde, après y avoir apporté des modifications à l'aide de variables, elle-mêmes venant d'on ne sait où.
+Avec quelques dizaines de lignes de code, nous avons un effet de levier maximum. Comme quoi, ce n'est pas en ajoutant du code qu'on améliore le programme, mais au contraire, en amplifiant la puissance du code écrit.
+C'est ce « Graal » que je recherche dans chacun de mes développements et qui fait la beauté du code. En voici une démonstration.
+Dans vos prochains développements utilisant XML, pensez à intégrer ces approches pour ouvrir de nouvelles portes d'intégrations ! Ensuite, laissez mijoter et soyez surpris de ce que votre code devient ;-)
+
+
+ANNEXES
+import java.io.IOException;
+import java.io.Reader;
+import java.util.Properties;
+import java.util.Stack;
+
+
+public class VariableReader extends Reader
+{
+  private static final int DEFAULTSIZEBUF = 8192;
+  private static final int EXTENDBUFFER=130;
+  private static final int PERCENT=100;
+  private char[] buf_;
+  private int bufsize_;
+  private int pos_ = 0;
+  private int size_ = 0;
+  private final Stack startvar_ = new Stack();
+  private int lenvar_;
+  private final Properties prop_;
+  private final Reader next_;
+  public static class VariableNotFound extends IOException
+  {
+    private static final long serialVersionUID = 1L;
+    private String varname_;
+    public VariableNotFound(final String msg,final String varname)
+    {
+      super(msg);
+      varname_=varname;
+    }
+    public String getVariableName()
+    {
+      return varname_;
+    }
+  }
+
+
+  public VariableReader(final Reader next, final int bufsize, final Properties prop)
+  {
+    super();
+    next_ = next;
+    prop_ = prop;
+    bufsize_ = bufsize;
+    buf_ = new char[(bufsize * EXTENDBUFFER) / PERCENT];
+  }
+
+
+  public VariableReader(final Reader next, final Properties prop)
+  {
+    this(next, DEFAULTSIZEBUF, prop);
+  }
+  public void close() throws IOException
+  {
+    next_.close();
+  }
+  public int read(final char[] cbuf, final int off, final int len)
+    throws IOException
+  {
+    int offset=off;
+    int length=len;
+    if (size_ == -1)
+      return -1; // EOF
+    int readsize = 0;
+    while ((size_ != -1) && (length > 0))
+    {
+      final int maxcopy = (length > size_) ? size_ : length;
+      System.arraycopy(
+        buf_, pos_, cbuf, offset, maxcopy);
+      length -= maxcopy;
+      offset += maxcopy;
+      readsize += maxcopy;
+      pos_ += maxcopy;
+      size_ -= maxcopy;
+      if (size_ == 0)
+      {
+        pos_ = 0;
+        int start = pos_;
+        if (startvar_.size() > 0)
+        {
+          final int startvar=((Integer)startvar_.pop()).intValue();
+          System.arraycopy(
+            buf_, startvar, buf_, 0, lenvar_);
+          start = lenvar_;
+        }
+        size_ = next_.read(
+          buf_, start, bufsize_ - start) + start;
+        if (size_==-1)
+           return readsize;
+        boolean dollard = false;
+        boolean variable = false;
+        int i = 0;
+        int startvar=0;
+        for (; i < size_; ++i)
+        {
+          if (dollard)
+          {
+            if (buf_[i] == '{')
+            {
+              variable = true;
+              startvar_.push(new Integer(i-1));
+            }
+            else
+              dollard = false;
+          }
+          if (variable)
+          {
+            if (buf_[i] == '}')
+            {
+              startvar=((Integer)startvar_.pop()).intValue();
+              variable = !startvar_.empty();
+              lenvar_ = i - startvar + 1;
+              final String varname = new String(buf_,
+                 startvar + 2, i - startvar – 2);
+              String value = prop_.getProperty(varname);
+              if (value == null)
+              {
+                onError("Variable "  + varname + " not found!",varname);
+                value=new String(buf_, startvar,lenvar_);
+              }
+              if (!value.equals(new String(buf_, startvar,
+                 lenvar_)))
+              {
+                final int l = value.length();
+                final int solde = size_ - startvar - lenvar_;
+                if (startvar + l + solde > buf_.length)
+                {
+                  final char[] buf =  
+                    new char[((buf_.length + solde) * EXTENDBUFFER)
+                            / PERCENT];
+                  System.arraycopy(
+                    buf_, 0, buf, 0, buf_.length);
+                  buf_ = buf;
+                }
+                System.arraycopy(
+                  buf_, startvar + lenvar_, buf_,
+                startvar + l, solde);
+                System.arraycopy(
+                  value.toCharArray(), 0, buf_,
+                  startvar, l);
+                size_ -= lenvar_ - l;
+                i = startvar;
+              }
+            }
+          }
+          if (buf_[i] == '$')
+          {
+            dollard = true;
+          }
+        }
+        if (variable || dollard)
+        {
+          lenvar_ = i – ((Integer)startvar_.peek()).intValue();
+          size_ -= lenvar_;
+        }
+      }
+    }
+    return readsize;
+  }
+  protected void onError(String msg,String varname) throws VariableNotFound
+  {
+    throw new VariableNotFound(msg,varname);
+  }
+}
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Properties;
+
+
+import javax.xml.namespace.NamespaceContext;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParserFactory;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathExpressionException;
+import javax.xml.xpath.XPathFactory;
+
+
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+import org.xml.sax.helpers.DefaultHandler;
+
+
+public final class ExtendedProperties
+{
+  private static final XPathFactory XPATH_FACTORY =
+    XpathFactory.newInstance();
+
+
+  public static Properties load(File filename, final Properties prop)
+    throws IOException, XPathExpressionException, SAXException,ParserConfigurationException
+  {
+    String path=filename.getPath();
+    if (path.startsWith("~"))
+    {
+      filename=new File(System.getProperty("user.home")+path.substring(1));
+    }
+    return load(
+      filename.toURI().toURL(), prop);
+  }
+
+
+  public static Properties load(final URL file, final Properties prop)
+  throws IOException, XPathExpressionException, SAXException,
+    ParserConfigurationException
+  {
+    URL filename=file;
+    String include=null;
+    do
+    {
+      Properties p=new Properties();
+      InputStream in=filename.openStream();
+      if (filename.getPath().endsWith(".xml"))
+        p.loadFromXML(in);
+      else
+        p.load(in);
+      in.close();
+      for (Iterator i=p.entrySet().iterator();
+        i.hasNext();)
+      {
+        Map.Entry entry=(Map.Entry)i.next();
+        final String value=(String)entry.getValue();
+        prop.put(entry.getKey(),parseValue(value));
+      }
+      p.clear();
+      include=(String)prop.get("include");
+      if (include!=null)
+      {
+        final String exform=filename.toExternalForm();
+        final int idx=exform.lastIndexOf('/');
+        prop.remove("include");
+        if (include.startsWith("~"))
+        {
+          include=System.getProperty("user.home")+include.substring(1);
+        }
+        if (include.startsWith("/"))
+          filename=new File(include).toURI().toURL();
+        else
+          filename=new URL(exform.substring(0,idx+1)+include)
+      }
+    }
+    while (include!=null);
+    return prop;
+  }
+  
+  public static final String parseValue(String value)
+    throws XPathExpressionException, SAXException,
+           IOException, ParserConfigurationException
+  {
+    if (value.startsWith("xpath:"))
+      return parseXPathProperty(value.substring("xpath:".length()));
+    return value;
+  }
+
+
+  public static String parseXPathProperty(String tokens)
+      throws XPathExpressionException, SAXException,
+        IOException, ParserConfigurationException
+  {
+    final HashMap namespaceMapping = new HashMap();
+    int idxcomma = 0;
+    if (tokens.startsWith("xmlns:"))
+    {
+      idxcomma = tokens.indexOf(',');
+      final int idxdots = tokens.indexOf(':');
+      final int idxequal = tokens.indexOf('=');
+      if ((idxcomma < 0) || (idxdots < 0) || (idxequal < 0)
+          || (idxdots > idxequal))
+        throw new XpathExpressionException(
+            "XPath must be start with"+
+            "xmlns:alias=\"uri\",document('xxx')...");
+      final String alias = tokens.substring(
+        idxdots + 1, idxequal);
+      String uri = tokens.substring(
+        idxequal + 1, idxcomma);
+      if (uri.charAt(0) == '"')
+        uri = uri.substring(1, uri.length() - 1);
+      namespaceMapping.put(
+        alias, uri);
+
+
+      tokens = tokens.substring(idxcomma + 1);
+    }
+    final int idx2 = tokens.indexOf(')');
+    if ((idx2 < 0) || !tokens.startsWith("document('"))
+    {
+      throw new XpathExpressionException(
+          "XPath must be start with "+
+          "[xmlns:alias=\"uri\",]document('xxx')...");
+    }
+
+
+    final String filename = tokens.substring(
+      10,idx2 – 1);
+    final String xpath = tokens.substring(idx2 + 1);
+
+
+    // 1. Catch all namespace mapping
+    final SAXParserFactory saxParserFactory = SAXParserFactory
+      .newInstance();
+    saxParserFactory.setNamespaceAware(true);
+    URL url;
+    try
+    {
+      url = new URL(filename);
+    }
+    catch (MalformedURLException e)
+    {
+      url = new File(filename).toURI().toURL();
+    }
+    InputStream in=url.openStream();
+    try
+    {
+      saxParserFactory.newSAXParser().parse(
+        in, new DefaultHandler()
+        {
+          public void startPrefixMapping(final String prefix,
+            final String uri)
+          {
+            namespaceMapping.put(
+              prefix, uri);
+          }
+        });
+    }
+    finally
+    {
+      in.close();
+    }
+
+
+    // 2. evaluate Xpath
+    XPath environnement = XPATH_FACTORY.newXPath();
+    environnement.setNamespaceContext(new NamespaceContext()
+    {
+      public String getNamespaceURI(final String prefix)
+      {
+        return (String) namespaceMapping.get(prefix);
+      }
+      public String getPrefix(final String namespaceURI)
+      {
+        return null;
+      }
+
+
+      public Iterator getPrefixes(final String namespaceURI)
+      {
+        return Collections.EMPTY_LIST.iterator();
+      }
+    });
+    try
+    {
+      final String result = environnement.evaluate(
+        xpath, new InputSource(in=url.openStream()));
+      return result;
+    }
+    finally
+    {
+      in.close();
+    }
+  }
+  private ExtendedProperties()
+  {
+  }
+}

@@ -44,45 +44,45 @@ def main(**kwargs):
     return prediction
 
 
-class TestMain:
-    def test_create_model_train_and_predict(self):
-        # Given
-        kwargs = {
-            'input_text_path': 'data/test.txt',
-            'sanitized_text_path': 'data/training_data.txt',
-            'sequence_length': 5,
-            'number_of_character_between_sequences': 3,
-            'number_of_epoch': 3,
-            'batch_size': 1,
-            'text_starter': ' ahah',
-            'prediction_length': 6
-        }
-
-        # When
-        result = main(**kwargs)
-
-        # Then
-        assert result == ' ahahhhhhhh'
-
-
-class TestMainMock:
-    @patch('text_generator.predictor.predictor._predict_single_character')
-    def test_create_model_train_and_predict(self, _predict_single_character):
-        # Given
-        kwargs = {
-            'input_text_path': 'data/test.txt',
-            'sanitized_text_path': 'data/training_data.txt',
-            'sequence_length': 5,
-            'number_of_character_between_sequences': 3,
-            'number_of_epoch': 3,
-            'batch_size': 1,
-            'text_starter': ' ahah',
-            'prediction_length': 6
-        }
-        _predict_single_character.return_value = ' oh'
-
-        # When
-        result = main(**kwargs)
-
-        # Then
-        assert result == ' ahah oh oh oh oh oh oh'
+# class TestMain:
+#     def test_create_model_train_and_predict(self):
+#         # Given
+#         kwargs = {
+#             'input_text_path': 'data/test.txt',
+#             'sanitized_text_path': 'data/training_data.txt',
+#             'sequence_length': 5,
+#             'number_of_character_between_sequences': 3,
+#             'number_of_epoch': 3,
+#             'batch_size': 1,
+#             'text_starter': ' ahah',
+#             'prediction_length': 6
+#         }
+#
+#         # When
+#         result = main(**kwargs)
+#
+#         # Then
+#         assert result == ' ahahhhhhhh'
+#
+#
+# class TestMainMock:
+#     @patch('text_generator.predictor.predictor._predict_single_character')
+#     def test_create_model_train_and_predict(self, _predict_single_character):
+#         # Given
+#         kwargs = {
+#             'input_text_path': 'data/test.txt',
+#             'sanitized_text_path': 'data/training_data.txt',
+#             'sequence_length': 5,
+#             'number_of_character_between_sequences': 3,
+#             'number_of_epoch': 3,
+#             'batch_size': 1,
+#             'text_starter': ' ahah',
+#             'prediction_length': 6
+#         }
+#         _predict_single_character.return_value = ' oh'
+#
+#         # When
+#         result = main(**kwargs)
+#
+#         # Then
+#         assert result == ' ahah oh oh oh oh oh oh'

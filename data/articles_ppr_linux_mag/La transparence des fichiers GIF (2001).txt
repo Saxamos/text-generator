@@ -1,0 +1,28 @@
+﻿La transparence des fichiers GIF
+Par Philippe PRADOS - 2001
+www.prados.fr
+Les fichiers gif permettent de déclarer une couleur, parmi les 256, comme transparente. Cela permet de garder l'image de fond d'une page HTML. Par exemple, l'image de gauche ci-dessous n'utilise pas la transparence, alors que l'image de droite oui.
+  
+   
+Le problème est qu'il n'y a qu'une couleur transparente. Il n'y a pas de proportions dans la transparence. Les pixels sont transparents ou pas. Ils ne sont pas un peu transparent. Je m'explique. Prenons un exemple simple. Nous désirons dessiner un minuscule triangle de UN pixel de large pour TROIS pixels de haut.
+  
+
+L'algorithme d'un bon programme de dessin (style Photoshop) va calculer l'image de droite. Suivant la luminance de chaque pixel, une couleur est calculée. Le triangle étant noir sur fond blanc, des gris sont utilisés. Seul le point supérieur pourra être transparent avec une image gif.
+La couleur des pixels a été choisie par rapport à la couleur de fond. Si le fond change, les points grisés ne seront pas de la bonne couleur.
+  
+
+Pour le trait de gauche, l'algorithme calcule l'image du centre. Si celle-ci est placée sur un fond sombre, cela donne l'image de droite. Normalement, les pixels gris devraient être beaucoup plus foncés.
+Pour être indépendant de la couleur de fond, il faut ajouter une couche à l'image, représentant la transparence de chaque pixel.
+  
+
+Le format gif ne sait pas faire cela, contrairement aux calques de Photoshop. Il faut donc dessiner sur un fond proche de la moyenne des couleurs du fond. Par exemple, l'image de gauche ci-dessous est dessinée sur un fond noir. Avec le fond clair que je possède, cela donne en transparence :
+  
+   
+Il y a un bord noir sur le bord du triangle. En effet, seul les pixel complètement noir sont transparent. Les pixels un peu noir, un peu rouge ne le sont pas. D'où la présence d'une bordure presque noire.
+Si par contre, je dessine l'image sur un fond blanc, j'obtiens :
+  
+   
+Il existe un bord presque blanc, mais il semble invisible. Il n'est pas possible d'utiliser la transparence sur un fond trop contrasté. Par exemple, je n'ai pas de solution sur un fond bicolore.
+  
+
+En jouant avec des tramages, il est possible de moduler la transparence d'une image. Certains points transparents sont entrelacés entre des points colorés.

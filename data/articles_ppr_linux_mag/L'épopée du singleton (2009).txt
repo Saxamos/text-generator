@@ -1,0 +1,138 @@
+﻿L'épopée du singleton
+  
+
+Par Philippe PRADOS - 2009
+www.prados.fr
+Pour la veillée de ce soir, je vais vous conter l'incroyable histoire du Singleton. Je la tiens de mon père qui la tenait de son père, et cela depuis des générations. Le Singleton, une noble idée, trop souvent galvaudée qu'il est temps d'appréhender avec raison.
+Nous sommes en l'an 72. L'air avenant et les barbes fournies, Dennis Ritchiei et Ken Thompsonii dirigent le royaume Ciii. La langue du même nom est simple et rustique. Très économe en mots, la population n'est pas bavarde. Quelques signes suffisent à se faire comprendre.  
+Le royaume est riche de beaucoup d'artisans. Chacun est spécialisé par objectif ou par fonction. Qui s'occupe de calculer, qui forge des chaînes de caractères, qui découpe, analyse, assemble des paquets. La vie est simple et sans encombre.
+Les biens confectionnés, qu'on appelle « structures de données », circulent facilementiv. Chaque compagnon y apporte sa touche pour le bien de la collectivité.
+Les artisans sont organisés en guildes, jalouse de leurs spécialités. Les embellissement ne peuvent provenir que d'un adepte de la corporation. Après l'accord de tous, ils sont rapidement popularisés dans tout le royaumev.
+Des cathédrales naissent de cette main-d'œuvre qualifiée. La facture architecturale, que l'on appelle Unixvi, est imitée dans tout le continent, avec quelques variantes de-ci de-là, dont le chef-d'œuvre Finlandais que vous connaissez tous, réalisé par le grand maître Linus Torvaldsvii : Linuxviii.
+À la moindre faiblesse d'un compagnon, une épidémie de fuite mémoireix menace. Il est laborieux de discerner sa provenance. Chaque guilde dénigrant les autres.
+Dix ans plus tard, Dennis Ritchie et Ken Thompson reçoivent la visite d'un cousin éloigné, Bjarne Stroustrupx, venant d'un petit pays, le Danemark. La barbe moins fournie, il apporte dans son baluchon des idées révolutionnaires. Revenant d'un voyage dans la contré de Smalltalkxi, il suggère de briser la constitution rigide des compagnons et de la faire évoluer. Il veut marier les structures de données et les artisans. Que chacun puisse contribuer sans quémander l'aval d'une guilde.  
+Les nouvelles structures de données sont alors différentes les unes des autres, mais similaires. On les appelle objets. Certains se gaussent de ce désordre, de ces objets sans règles et sans rigueur, de ces structures polymorphiques. D'autres évoquent les notions d'héritages et d'agrégations.
+L'idée de monseigneur Stroustrup fait rapidement le tour du royaume. Les fidèles sujets préfèrent continuer avec les structures mais nombreux se convertissent aux objets. Le royaume se scinde. D'un cotés le peuple C plus conservateur, de l'autre une nouvelle région baptisée C++xii. Les langues des deux monarchies sont très proches. Les relations sont nombreuses, les influences croisées et multiples.
+L'organisation de C++ est plus agile et plus riche, mais elle se heurte à un écueil : l'ordre d'élaboration des ustensiles dit Globauxxiii. Héritage de C, chaque objet peut être bâti avant le début de la fête de « Main()xiv ». Or, il demeure impossible d'organiser l'ordre de fabrication. Les artisans se chamaillent lorsqu'un objet dépend d'un autre qui n'est pas terminé. La fête est retardée ou mal préparée, créant désordres et déceptions.
+Pour résoudre cela, on invente la notion d'objet à usage unique. Des objets spécifiques, ayant pour seul objectif d'organiser l'ordre d'assemblage. Cela permet, entre autre, d'organiser les flux des trois rivières « cin », « cout » et « cerr » traversant la cérémoniexv.
+Cette idée est reprise et enrichie par la « bande des quatre » : Erich Gamma, Richard Helm, Ralph Johnson et John Vlissides. Elle se diffuse rapidement grâce à leur ouvrage Design Patternxvi sous le nom de Singletonxvii. Leur idée est d'avoir un objet unique au monde, généralement élaboré à la demandexviii. Cela permet d'ajuster les dépendances.
+Nous somme en 90. Dans la petite principauté de Sun, un original du nom de James Goslingxix, la barbe suffisamment fournie, développe un dialecte qui deviendra plus tard une nouvelle langue : Javaxx. Très proche de C ou de C++, il emprunte une partie de la syntaxe, ajoute quelques nouvelles pratiques et en délaisse d'autres. Il souhaite simplement faciliter la diffusion de différents petits gadgets.  
+La communication entre les royaumes prend un très grand essor grâce à la diffusion d'une norme internationale issue de l'armement : TCP/IP et d'un format de diffusion HTML. En 94, monseigneur Gosling et ses amis ont l'idée d'adapter leur langue à cette technologie de communication.
+En quelques semaines, elle fait le tour du monde et est utilisée et étudiée par les chercheurs. En effet, la langue Java permet de rendre dynamique la communication, grâce à un usage particulier : les Appletsxxi. D'autres approches plus efficaces prennent rapidement le relais comme DHTMLxxii ou AJAXxxiii.
+De nos jours, on n'entend pratiquement plus parler des Applets mais Java continue son chemin, du côté des élites - les architectes - et non du peuple - les internautes.
+Des habitants de C et de C++ apprennent Java pour participer à des projets novateurs. Ils viennent avec leurs traditions et leurs habitudes. Permettant d'organiser l'ordre d'initialisation des objets, le Singleton est réutilisé, même si le dialecte n'en a pas besoinxxiv. En effet, c'est une langue paresseuse. Sa structure permet de construire les objets que lorsqu'on les utilisent. Il n'y a donc jamais de difficulté pour organiser les dépendances.
+L'usage du singleton se généralise, surtout chez les bilingues C++/Java. Cela en fait leur petit accent, si charmant pour les dames de Java. Leurs descendances perpétuent la tradition du Singleton.
+Bien plus tard, certains constatent que la confection tardive des Singletons peut poser des soucis. En effet, ils permettent d'organiser l'ordre de construction, mais à la condition qu'un seul traitement soit effectué à la fois. Dans le cas contraire, il y a des risques d'avoir plusieurs exemplaires de Singleton fabriqués simultanémentxxv. Ce qui est un comble pour un objet devant être unique ! Est-ce le début de la contrefaçon ?
+Les artisans proposent d'utiliser un juge de paix. Cela consiste à demander à un fonctionnaire du nom de Synchronize, d'interdire deux constructions en même tempsxxvi. Synchronize se charge de désigner arbitrairement qui a le droit de construire l'objet et qui doit attendre avant de l'utiliser.
+Mais, comme les fonctionnaires ne sont pas très nombreux, ni très rapides, des petits malins contournent la difficulté. Ils vérifient d'abord, par dessus l'épaule de Synchronize, qu'il n'existe pas déjà un objet, avant d'aller consulter le bureaucrate. Ainsi, si l'item est déjà présent, il ne sert à rien de faire la file pour demander un arbitrage pour la construction, puisque l'on sait que c'est déjà fait. Cette approche est connu sous le nom de « double checkxxvii ».
+De bouches à oreilles, l'usage se diffuse. Jusqu'au jour où l'un des plus malins démontre que la solution de contournement ne fonctionne pas toujours. En effet, il existe des illusions d'optique pouvant faire croire à l'absence ou à la présence du Singletonxxviii. L'usage détourné qui est fait du Synchronize n'est alors plus garanti. Cela remet en cause l'approche double checks.
+Arrivé à la quatrième édition de la langue Java, un conseil des sages se réunit pour trouver une solution. En effet, il y a mainte double-checks dans le royaume. Comment corriger cela sans tout mettre à mal ? La solution est dénichée dans la définition du mot volatilexxix. Il est proposé de modifier légèrement sa sémantique et de l'utiliser dans toutes les situations de double-checksxxx. Proposition de lois sous la référence JSR133xxxi.
+Certains raillent cette décision qui a un impact négatif sur les performances de tous les traitements utilisant déjà ce vocable. D'autres argumentent que personne n'ira apporter des modifications aux double-checks, si minime soit-elle. Rien n'y fait. Le conseil statue pour la cinquième version du dictionnaire.
+D'autre royaumes prennent le parti de pratiquer le singleton (Pythonxxxii, Perlxxxiii, VBxxxiv ), avec souvent, les mêmes travers et les mêmes risques.
+Singleton poursuit son chemin, de royaume en royaume. Vous le croisez tous les jours sans le savoir.
+Mes amis, sachez comment cette idée a germée ; comment une utilisation détournée d'une bonne idée valable pour le royaume de C++, entraîne le sacrifice des performances du royaume de Java, alors que cela ne sert à rien.
+L'histoire est semée d'inventions ayant des destinées inattendues qui résistent parfois à la raison.
+Consultez vos anciens avant de perpétrer des pratiques hors du temps. Jaugez de l'opportunité de chaque pratique avant de copier votre voisin. Les traditions ne sont pas toujours bonnes conseillères.
+
+
+Philippe Prados - 2009
+www.prados.fr
+i http://fr.wikipedia.org/wiki/Dennis_Ritchie
+ii http://fr.wikipedia.org/wiki/Ken_Thompson
+iii http://en.wikipedia.org/wiki/C_%28programming_language%29
+iv De nombreuses fonctions manipulent les mêmes données sans qu'il soit possible de les identifier toutes.
+v Modifier une structure de donnée à des impacts nombreux et difficilement maîtrisable.
+vi Unix, est le nom d'un système d'exploitation multi-tâche et multi-utilisateur créé en 1969.
+vii http://fr.wikipedia.org/wiki/Linus_Torvalds
+viii Linux est écrit essentiellement en C et en assembleur.
+ix http://fr.wikipedia.org/wiki/Fuite_de_m%C3%A9moire
+x http://fr.wikipedia.org/wiki/Bjarne_Stroustrup
+xi http://fr.wikipedia.org/wiki/Smalltalk un des premiers langage à objets
+xii http://en.wikipedia.org/wiki/C_plus_plus
+xiii En C++, tous est objet. Il est possible d'avoir des objets statiques ou globaux. Leurs constructeurs doivent être invoqués avant le début de la fonction de démarrage main(). Pour cela, chaque fichier compiler (.o ou .obj) possède des symboles spéciaux indiquant des fonctions à invoquer pour initialiser le module, pour invoquer les constructeurs des objets globaux du module. Le linker doit alors regrouper toute les fonctions de tous les modules et les invoquer avant de démarrer main(). Mais, il n'est pas possible d'indiquer un ordre lors de l'invocation de ces fonctions d'initialisations. Chaque link peut produire un ordre différent. Dans les toutes premières versions de C++, il s'agissait d'un pré-processeur générant du source C qui était ensuite compilé. Pour gérer le problème des initialisations des variables globales, il y avait un phase de post-link pour intégrer ces initialisations, non présentes en C.
+xiv Nom de la première fonction exécuté dans un programme C, C++ ou Java.
+xv Lors de la première réalisation des API de gestion des flux du C++, les auteurs ont été confronté à une difficulté. Les flux standards cin, cout et cerr sont des objets globaux. Ils doivent être initialisés avant le lancement de main(). Mais, un constructeur d'un autre objet global peut avoir besoin d'afficher une trace, et donc d'utiliser l'objet cout ou cerr. Que ce passe-t'il si les objets des flux standards ne sont pas encore initialisés ? Rien ne garantie que l'ordre de dépendance sera respecté. Pour résoudre cela, les auteurs utilisent une astuce. Ils ajoutent dans le fichier d'en-tête, inclus dans chaque classe utilisant les flux, un objet statique technique, s'occupant de vérifier l'initialisation de ces flux. Concrètement, les objets des flux standards peuvent être utilisés avant l'invocation de leurs constructeurs ! L'objet technique se charge de les initialiser avant la construction si nécessaire. Deux situations peuvent alors arriver. Soit les flux sont initialisés avec un constructeur spécifique, n'ayant aucun impact sur l'objet, et les autres objets statiques peuvent les utiliser normalement. Soit les flux ne sont pas initialisés lors de l'utilisation par un constructeur d'un objet statique. Les flux sont quand même utilisés. Plus tard, les constructeurs des flux sont appliqués mais ils n'ont aucun impact sur les instances.
+xvi http://fr.wikipedia.org/wiki/Design_Patterns
+xvii http://fr.wikipedia.org/wiki/Singleton_(patron_de_conception)
+xviii Le modèle standard d'initialisation d'un singleton est le suivant en Java:
+public class MaClass
+{
+  private MaClass()
+  {
+  }
+  static private MaClass singleton_;
+  public static MaClass getSingleton()
+  {
+    if (singleton_==null)
+    {
+      singleton_=new MaClass();
+    }
+    return singleton_;
+  }
+  public void maMethode()
+  {
+    ...
+  }
+}
+xix http://en.wikipedia.org/wiki/James_Gosling
+xx http://fr.wikipedia.org/wiki/Langage_de_programmation_Java
+xxi http://fr.wikipedia.org/wiki/Applet
+xxii http://fr.wikipedia.org/wiki/DHTML
+xxiii http://fr.wikipedia.org/wiki/AJAX
+xxiv Les classes de Java sont chargées lors de leurs premières utilisation. Ainsi, les objets statiques ou globaux ne sont initialisés que si un code à besoin de la classe. Il ne sert à rien de retarder la construction par un test de la présence du singleton. Un code comme celui-ci est absurde :
+static private MaClass singleton_;
+public static MaClass getSingleton()
+{
+  if (singleton_==null)
+  {
+    singleton_=new MaClass();
+  }
+  return singleton_;
+}
+Il doit être remplacé par :
+static private MaClass singleton_=new MaClass();
+public static MaClass getSingleton()
+{ 
+  return singleton_; 
+}
+L'instance singleton_ sera construite, non lors du démarrage du programme, mais lors de la première utilisation de la classe, c'est à dire lors de la première invocation de la fonction getSingleton(). Le singleton est pertinent que s'il y a de l'héritage ; que si l'initialisation peut construire potentiellement différent objets, suivant des paramètres. Par exemple, une construction différente pour Windows et une autre pour Linux. Voir Singleton.
+xxv Si deux threads invoquent simultanément la méthode getSingleton(), il peut y avoir deux invocations du constructeurs de MaClass(). Cela arrive si le changement de context des threads par le système d'exploitation arrive entre le if (singleton_==null) et la construction du singleton.
+xxvi Le code est modifié ainsi :
+public class MaClass
+{
+  private MaClass()
+  {
+  }
+  static private MaClass singleton_;
+  public static synchronized
+  MaClass getSingleton()
+  {
+    if (singleton_==null)
+      singleton_=new MaClass();
+    return singleton_;
+  }
+}
+xxvii La version avec le double-check :
+public class MaClass
+{
+ static private MaClass singleton_;
+ public        static MaClass getSingleton()
+ {
+   if (singleton_==null)
+   {
+     synchronized(MaClass.class)
+     {
+       if (singleton_==null)
+         singleton_=new MaClass();
+     }
+   }
+   return singleton_;
+ }
+}
+xxviii Dans une situation multi-processeur, les caches d'accès en mémoires peuvent entraîner un ordre différent entre la lecture et l'écriture de la mémoire, vue par chaque processeur. Cela entraîne que la valorisation du singleton par un processeur n'est pas immédiatement visible par un autre processeur.
+xxix La nouvelle sémantique indique qu'a chaque accès à une variable volatile, il faut demander au processeur de vider son cache de traitement ! Le double-check peut alors être utilisé à la condition d'ajouter l'attribut volatile au pointeur. static private volatile MaClass singleton_;
+xxx http://en.wikipedia.org/wiki/Double-checked_locking
+xxxi http://jcp.org/en/jsr/detail?id=133
+xxxii http://fr.wikipedia.org/wiki/Singleton_(patron_de_conception)
+xxxiii http://perldesignpatterns.com/?SingletonPattern
+xxxiv http://en.literateprograms.org/Singleton_pattern_(Visual_Basic_.NET)

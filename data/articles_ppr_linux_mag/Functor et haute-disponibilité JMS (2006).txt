@@ -1,0 +1,338 @@
+﻿Functor et haute-disponibilité JMS
+  
+
+Dans cet article, je vous propose d’utiliser une technique de programmation, peu utilisé sous Java, permettant de factoriser des algorithmes complexes. Nous allons utiliser des « functors » afin de rédiger un driver JMS, ajoutant des capacités de répartition de charge et de tolérances aux pannes à un driver JMS en étant dépourvu.
+Par Philippe PRADOS - 2006
+www.prados.fr
+Imaginons un projet devant utiliser un serveur JMS (Java Messaging Service) pour y stocker des messages. Ceux-ci sont capturés par différents applicatifs (EAI, Back-office, etc).
+Si le serveur JMS tombe, toute l’application est interrompue, ce qui est intolérable. Pour contourner cette difficulté, nous avons besoin d’un serveur JMS hautement disponible, où bien, si ce n’est pas possible, d’utiliser un cluster permettant de surveiller le serveur JMS et de le relancer, si nécessaire, sur le même ou sur un autre serveur. Une adresse IP virtuelle permet aux clients JMS d’ignorer la localisation physique du serveur JMS.
+  
+
+Le client doit tolérer que pendant un certain temps, le serveur JMS ne soit pas accessible. Le temps qu’un chien de garde détecte la perte d’un serveur, débranche les montages disque, monte les disques sur un autre serveur et lance un serveur JMS de remplacement. Tous ces traitements prennent un certain temps. L’application tolère un plantage ou la perte d’un serveur JMS. Mais, pendant la migration ou le redémarrage d’un serveur JMS, il y a une impossibilité momentanée d’utiliser l’application.
+Pour éviter ce cas limite, utilisons non pas un mais deux serveurs de queues JMS. Ainsi, si l’un tombe, l’autre est toujours actif. Chaque serveur de queues est géré par un cluster. En cas de problème, le serveur de queues peut migrer d’un serveur à un autre. Pendant ce temps, l’autre serveur JMS reste actif. Il y a donc deux serveurs JMS actifs et deux serveurs JMS passifs. Le client doit utiliser les deux queues comme une seule queue virtuelle. Aucun message ne doit être perdu. Etant donnée que la consommation des queues n’est pas prédictible, une distribution aléatoire des messages dans une des deux queues est suffisante. Il n’est pas nécessaire d’avoir une répartition de type Round Robin.
+
+
+  
+
+Comment le client peut-il voir deux queues comme une seule ? Plusieurs approches sont possible :
+* Ecrire un code spécifique pour chaque client des deux queues actives ;
+* Ecrire un driver JMS s’occupant de présenter les deux queues comme une seule ;
+Offrir un driver répondant aux spécifications JMS afin de remplacer le driver défaillant permet de ne pas modifier le code client, et ouvre la perspective d’utiliser plus tard, un driver JMS HD (Haute Disponibilité) lorsqu’il sera disponible, sans remettre en cause de le code applicatif.
+Nous allons nous focaliser sur la deuxième approche, même si elle semble plus complexe au premier abord. Nous allons voir que l’utilisation d’une idée forte, les functors, va nous simplifier grandement la tache de rédaction.
+La stratégie
+Nous devons dans un premier temps regarder comment implémenter un driver JMS. Comme la plupart des drivers normalisées, seule des interfaces sont à renseigner. Il n’y a pas de classes à hériter. C’est un bon présage. En effet, cela indique que la construction de chaque instance du driver est sous le contrôle de celui-ci. Il existe obligatoirement des méthodes de construction pour chaque objet. En effet, en regardant un peu plus dans le détail, c’est bien le cas. La toute première classe d’un driver JMS est un ConnectionFactory, une usine à connexion. Les autres classes permettent de construire les instances de proche en proche, suivants les besoins (connexions, sessions, messages, etc.)
+Nous voulons agréger plusieurs drivers JMS sous un seul. L’usine à connexion de notre driver va déléguer la construction à chaque usine des différents drivers agrégés.
+Nous pouvons alors proposer la stratégie suivante : Pour chaque interface des spécifications JMS nous allons écrire une classe qui possède un tableau d’éléments, répondant à la même interface.
+Par exemple, pour l’interface Connection, nous allons écrire une classe ayant ce modèle.
+class HAJMSConnection implements Connection
+{
+  private Connection[] connections_;
+    HAJMSConnection(Connection[] connections)
+  {
+    connections_=connections;
+  }
+}
+Ainsi, pour une connexion de notre driver, plusieurs connexions sont ouvertes, une par driver JMS correspondant. Une instance HAJMSConnection agrège plusieurs connexions. Pour chaque interface des spécifications JMS, une classe est implémentées. Elle possède un tableau d’instance de l’interface et une référence vers le géniteur.
+Une instance HAJMSConnection référence l’instance HAJMSConnectionFactory et possède des instances Connection. L’instance HAJMSSession référence l’instance HAJMSConnection, et possède des instances Session. L’instance HAJMSConnectionFactory et la mère de tous. Elle connaît l’état des différentes queues grâce aux ConnectionFactory qu’elle agrège.
+Notre driver doit parfois appliquer la même méthode à chaque sous composant agrégé, soit l’appliquer au premier disponible. Par exemple, si un client du driver JMS souhaite enregistrer un MessageListener (une instance invoqué lors de l’arrivé d’un message), il faudra enregistrer cette instance sur toute les queues. Ainsi, si un message arrive sur n’importe quelle queue, le client est notifié.
+Parfois, les méthodes ne s’appliquent qu’à une seule des queues. Par exemple, demander l’instance enregistrée pour recevoir les évènements d’une queue ne s’applique qu’a une seule queue car nous savons, par construction, que toutes les queues sont paramétrées de façon identique. Pour schématiser, les méthodes de set s’appliquent à toutes les instances ; les méthodes de get s’applique qu’a la première active.
+Nous pouvons constater qu’il existe trois familles de méthode : les méthodes de construction, les méthodes s’appliquant à toutes les instances et les méthodes s’appliquant à la première active.
+Occupons-nous de la situation où un traitement doit s’appliquer à toutes les instances. Par exemple, la méthode setMessageListener() de l’interface QueueReceiver. Elle peut être écrite comme ceci :
+class HAJMSQueueReceiver implements QueueReceiver
+{
+  QueueReceiver[] queueReceivers_;
+  //…
+  public void setMessageListener(MessageListener msgListener) throws JMSException
+  {
+    for (int i=0;i<queueReceivers.length;++i)
+    {
+      queueReceivers_[i].setMessageListener(msgListener);
+    }
+  }
+}
+Gérer les erreurs
+Ce code est simple, mais il ne gère pas les erreurs. En effet, comme l’indique la signature, la méthode setMessageListener peut émettre une exception. Que ce passe t’il si une instance invoquée émet une exception ? Et bien, la boucle est interrompue.
+Nous pouvons choisir de la continuer avec les autres instances du tableau avant de propager l’exception, mais cela ne permet pas au client d’ignorer un problème sur une seule des queues manipulées. Il est préférable de continuer le traitement, après avoir déclaré la queue correspondante en échec. S’il existe un chemin de contournement, l’exception est avalé par le code. Pour pouvoir déclarer un serveur en échec, il faut que chaque instance puisse garder un lien avec son géniteur, afin de remonter jusqu'à l’instance initiale ayant construit la connexion.
+Donc, les constructeurs de nos instances doivent recevoir également un pointeur vers le père. Ainsi, en cas d’échec, il est possible de remonter la chaîne pour déclarer le serveur comme HS. Une instance session, par exemple, peut connaître l’état d’une queue en naviguant jusqu'à l’instance HAJMSConnectionFactory.
+this.connection_.factory_.isFailed(x)
+La boucle doit être plus complexe. Elle doit vérifier qu’un serveur est valide avant d’invoquer un traitement et capturer les exceptions pour déclarer le serveur HS avant de continuer. Que se passe t’il si toutes les queues sont en échec ? Il faut le signaler à l’appelant. Nous allons alors garder un pointeur vers la dernière exception pour l’envoyer, si et seulement si, aucune invocation n’a réussie. Voici la version modifiée de notre méthode. (Notez la boucle for inversée pour des raisons d’optimisations. Cela permet de faire une comparaison avec la constante zéro – bytecode spécifique – plutôt qu’avec la taille du tableau)
+class HAJMSQueueReceiver implements QueueReceiver
+{
+  QueueReceiver[] queueReceivers_;
+  //…
+  public void setMessageListener(MessageListener msgListener) throws JMSException
+  {
+    JMSException last=null;
+    int nbOk=0;
+    for (int i=queueReceivers_.length-1;i>=0;--i)
+    {
+      try
+      {
+        if (queueReceivers_[i]!=null)
+        {
+          queueReceivers_[i].setMessageListener(msgListner);
+          ++nbOk;
+        }
+      }
+      catch (JMSException e)
+      {
+        last=e;
+        setError(i);
+      }
+    }
+
+
+   if (nbOk==0)
+      throw last;
+  }
+}
+Pour gérer les situations où il faut invoquer une méthode sur la première instance valide, le code est proche mais différent. Il faut continuer la boucle tant qu’il y a des exceptions. Par exemple, la méthode getMessageListener() peut être écrite comme ceci :
+class HAJMSQueueReceiver implements QueueReceiver
+{
+  QueueReceiver[] queueReceivers_;
+  //…
+  public MessageListener getMessageListener() throws JMSException
+  {
+    JMSException last=null;
+    int nbBad=0;
+    for (int i=queueReceivers_.length-1;i>=0;--i)
+    {
+      try
+      {
+        if (instances[i]==null) continue;
+        return queueReceivers_[i].getMessageListener();
+      }
+      catch (JMSException e)
+      {
+        ++nbBad;
+        last=e;
+        setError(i);
+      }
+    }
+    throw last;
+  }
+}
+Notez la présence du return pour interrompre la boucle. Les méthodes de constructions suivent un schéma similaire. Avec ce code, il est possible de détecter qu’un serveur est HS pour ne plus l’utiliser. Les méthodes setError() doivent faire le ménage, autant que possible, pour libérer les ressources qui ne seront plus utilisées.
+Ressusciter un serveur
+À la longue, avec ce code, il y aura de moins en moins de serveurs actifs. Il suffit d’une erreur sur chaque pour que l’application ne fonctionne plus. Nous souhaitons un driver HD (Haute Disponibilité). Cela veut dire que nous souhaitons cacher les erreurs lorsqu’elles arrivent s’il existe un chemin de contournement, mais également, nous souhaitons pouvoir réutiliser un serveur lorsqu’il devient à nouveau disponible. Une tâche de fond, branchée sur une tempo, peut tenter une connexion sur un serveur. Si celui-ci répond positivement, il est à déclaré à nouveau disponible.
+Comment propager cette bonne nouvelle à toutes les instances créés par le driver ? Plusieurs approches sont possible :
+* Garder un lien de l’instance principale vers toutes les instances créées pour pouvoir les modifier lorsqu’un serveur est disponible ;
+* Ressusciter une instance de manière paresseuse, lorsqu’une de ses méthodes pourraient en avoir besoin.
+La première approche est séduisante car elle permet de reconstruire tout le contexte en tâche de fond. Mais, son inconvénient majeur, est que pour fonctionner, elle doit garder des pointeurs vers toutes les instances construites. Cela veut dire que tant que la première instance existe, toutes les instances construites par les usines restent vivantes, même si plus personne les utilise. Il y a alors une belle fuite mémoire en perspective. Par exemple, si un client ouvre une session JMS avant chaque message, après 100 messages envoyés, le driver garde un lien vers 100 sessions.
+La deuxième approche est préférable. Elle présente l’inconvénient d’augmenter le temps d’exécution d’une méthode lorsqu’il est nécessaire de ressusciter d’autres instances, mais, elle présente l’avantage d’éviter les fuites mémoires et de fonctionner en mode synchrone, c’est à dire dans la même tâche que l’utilisateur. Sachant que les instances construites par les drivers ne sont pas réentrantes, cela nous enlève une difficulté.
+Nous ajoutons alors à nos instances la possibilité de ressusciter l’un de ses membres. Nous avons vu que chaque instance possède un tableau d’instances de même type. En cas d’échec, l’instance correspondante est perdu. Le membre du tableau est valorisé à null par la méthode setError() pour signaler qu’il ne faut plus l’utiliser. Si, en interrogeant l’instance principale du driver, celui-ci déclare qu’un serveur est valide, alors que l’instance courante possède un pointeur null, il est possible de la reconstruire.
+Avec quoi et dans quel état ? Pour pouvoir reconstruire une instance, il faut connaître son état lors de l’échec. En premier lieu, il faut mémoriser les paramètres d’initialisations. Ceux-ci sont gardés dans l’instance englobante. Puis, il faut restituer l’instance dans le même état que les autres. En mémorisants les valeurs des méthodes set, il est alors possible de les appliquer de nouveau sur l’instance. Par exemple, il faut à nouveau enregistrer un Listener sur la nouvelle instance.
+Si une exception arrive lors de cette étape, il faut la capturer et déclarer à nouveau le serveur HS. Nous ajoutons alors à notre code, l’invocation d’une méthode qui tente de ressusciter un serveur dans son contexte, juste avant de vérifier que l’instance n’est pas nulle. Ainsi, si l’instance peut être reconstruite, le membre du tableau correspondant est à nouveau valide et sera utilisé.
+Factoriser le code : les functors
+Nous avons une architecture systématique, une stratégie de reprise et une façon de faire pour chaque type de méthode. Il nous reste à implémenter toutes les interfaces des spécifications JMS (dix-neuf classes, cent quatorze méthodes). C’est là que le bas blesse. En effet, chaque méthode est différente, possède des paramètres différents. Nous avons un modèle de code, mais celui-ci doit être spécialisé pour chaque méthode. Les lignes en gras dans les sources indiquent les endroits des algorithmes devant être spécialisés pour chaque méthode.
+La première solution pour régler cela consiste à dupliquer le modèle dans chaque méthode, et d’adapter les quelques lignes pour chaque situation. Cela est très lourd et présente un grand risque de bug. Que faire si on désire modifier le modèle ? Il faut revoir toutes les méthodes ! Même si cela est faisable, ce n’est pas raisonnable.
+Une autre approche consiste à utiliser des functors.
+Un functor est une instance portant des fonctions. Elle ne possède pas d’attribut. Ce concept est très utilisé en C++ pour gérer les conteneurs. Par exemple, un algorithme de trie peut être plus ou moins rapide ou complexe. À un moment donné, il doit comparer deux objets. Comment livrer à l’algorithme le morceau s’occupant de la comparaison ? A l’aide d’un functor. Les classes java.util.Comparator et java.lang.Runnable sont des functors.
+Nous allons alors factoriser nos trois algorithmes haute disponibilité : « construction », « pour chaque », « pour le premier », afin qu’ils reçoivent des functors spécialisés.
+Déclarer un functor consiste simplement à déclarer une interface. Les méthodes recevront une instance implémentant cette interface. Le concept sera intéressant dans les clients. Nous verrons cela plus loin. Déclarons la classe utilitaire Functors et deux interfaces internes.
+class Functors
+{
+  public interface FunctorBuild
+  {
+    Object  createObject(int idx) throws JMSException;
+    boolean isFailed(int idx);
+    void setError(int idx) throws JMSException;
+  }
+  public interface FunctorDoIt
+  {
+    Object doIt(Object instance) throws JMSException;
+    void setError(int idx);
+    void resurate(int idx);
+  }
+  public static Object[] build(
+      Object[] instances, 
+      Object[] newInstances,
+      Log logger,
+      String msg,
+      FunctorBuild
+      functor)
+  {
+    …
+  }
+  public static void forEach(
+      Object[] instances,
+      Log logger,
+      String msg,
+     FunctorDoIt functor) throws JMSException
+  {
+    …
+  }
+  public static Object forFirst(
+      Object[] instances,
+      Log logger,
+      String msg,
+      FunctorDoIt functor) throws JMSException
+  {
+    …
+  }
+}
+Les algorithmes génériques build(), forEach() et forFirst() reçoivent un logger, afin de loguer dans le contexte de l’appelant. Cela facilite grandement l’analyse des traces. Un message permet de signaler le contexte. Ainsi, lorsqu’une exception est détectée, un message spécialisé peut être produit dans le logger de l’appelant.
+Puis, les méthodes reçoivent un functor spécialisé à leurs besoins. Celui-ci sera invoqué dans l’algorithme. Par exemple, la ligne suivante, de l’algorithme du type « pour chaque » ci dessus,
+queueReceivers_[i].setMessageListener(msgListener);
+sera modifié en :
+functor.doIt(queueReceivers_[i])
+Et ainsi de suite. Notez la perte du paramètre msgListener. Nous allons voir bientôt comment il transite. Maintenant, nous avons les outils pour rédiger toutes les méthodes correspondants aux interfaces des spécifications JMS.
+Utiliser les functors
+Nous souhaitons rédiger la méthode setMessageListener() de la classe HAJMSQueueReceiver, répondant à l’interface QueueReceiver. Armé de nos nouveaux jouets, et en utilisant judicieusement les inners classes anonymes, voilà ce que cela donne.
+public void setMessageListener(final MessageListener messageListener) throws JMSException
+{
+  log.debug("setMessageListener()");
+  Functors.forEach(queueReceivers_,
+      log,"set a message listner",
+      new FunctorDoIt()
+      {
+        public Object doIt(Object instance) throws JMSException
+        {
+          ((QueueReceiver)instance).setMessageListener(messageListener);
+          return null;
+        }
+        public void setError(int idx)
+        {
+          unregister(idx);
+        }
+        public void resurate(int idx)
+        {
+          doResurate(idx);
+        }
+      });
+  messageListener_=messageListener;
+}
+L’algorithme forEach() est spécialisé pour cette méthode. Pour valoriser le paramètre functor, nous utilisons une inner-classe anonyme. Il s’agir d’une classe répondant à une interface dont la définition est effectué lors de l’appel. Le code pourrait être écrit comme ceci :
+public void setMessageListener(final MessageListener messageListener) throws JMSException
+{
+  class MonFunctor implements FunctorForEach
+  {
+    public Object doIt(Object instance) throws JMSException
+    {
+      ((QueueReceiver)instance).setMessageListener(messageListener);
+      return null;
+    }
+    public void setError(int idx)
+    {
+      unregister(idx);
+    }
+    public void resurate(int idx)
+    {
+      doResurate(idx);
+    }
+  }
+  log.debug("setMessageListener()");
+  Functors.forEach(queueReceivers_,
+    log,"set a message listener",
+    new MonFunctor());
+  messageListener_=messageListener;
+}
+Personnellement, je préfère l’écriture compacte.
+Dans la méthode doIt(), nous convertissons l’instance reçu en paramètre, avant d’invoquer la méthode setMessageListener(). Notez que le paramètre messageListener n’a pas été transmis à la méthode forEach(). En effet, les inner-classes anonymes ont accès aux variables de la méthode, à la condition que celle-ci soient final.
+Déclarer des variables finals permet de les consulter dans le corps de la méthode doIt() du functor. Pour plus d’information sur les inner-classes, je vous conseille de regarder le papier que je publie sur mon site sur le sujet. Vous y trouverez tous les détails, les différentes syntaxes, le code généré, pourquoi certaines variables doivent être final, etc. Pour résumer, sachez que le compilateur va ajouter secrètement dans la classe anonyme, une copie de toutes les variables final utilisées par les méthodes du functor. Vous n’avez pas à vous occuper de transférer ces informations de la méthode setMessageListener() vers la méthode doIt() du functor.
+Notez également que les attributs final ou volatile de java ne font pas partie de la signature de la méthode. De point de vue de la surcharge des méthodes, c’est comme si ces attributs n’étaient pas présent. De même, une méthode synchronized peut surcharger une méthode qui ne l’est pas et réciproquement.
+Souvent, les développeurs obligent l’appelant à construire un tableau de paramètres, à livrer un pointeur sur une méthode, etc. Ces constructions inutiles sont complexes et sources d’erreurs. Les functors sont beaucoup plus simple et efficace, car c’est le compilateur java qui fait le boulot. Que la méthode invoquée possède un ou plusieurs paramètres, la construction est identique.
+Lors de la lecture de l’état transactionnel d’une session, il faut interroger une et une seule queue. Nous utilisons alors l’approche forFirst().
+public boolean getTransacted() throws JMSException
+{
+  log.debug("getTransacted()");
+  return ((Boolean)Functors.forFirst(sessions_,
+      log,"get a transacted status",
+      new FunctorDoIt()
+      {
+        public Object doIt(Object instance) throws JMSException
+        {
+          return new Boolean(((Session)instance).getTransacted());
+        }
+        public void setError(int idx)
+        {
+          unregister(idx);
+        }
+        public void resurate(int idx)
+        {
+          doResurate(idx);
+        }
+     })).booleanValue();
+}
+Nous constatons que les nombreux functors FunctorDoIt des différentes classes de notre driver, définissent systématiquement le même comportement pour les méthodes setError() et resurate(). Ceux sont des méthodes en charge de déclarer un serveur HS, ou au contraire de le ressusciter. Nous pouvons factoriser cela pour chaque classe. Comment ? En déclarant une inner-classe abstraite qui défini une fois pour toutes les deux méthodes, et laisse ouvert la méthode doIt(). Il s’agit de déclarer un presque functor.
+public class HAJMSQueueSession implements QueueSession
+{
+  protected abstract class AbstractFunctorDoIt implements FunctorDoIt
+  {
+    public abstract Object doIt(Object instance) throws JMSException;
+    public void setError(int idx)
+    {
+      unregister(idx);
+    }
+    public void resurate(int idx)
+    {
+      doResurate(idx);
+    }
+  }
+  //…
+}
+Nos méthodes vont maintenant instancier le presque-functor, en remplissant la méthode doIt() uniquement.
+public void setMessageListener(final MessageListener messageListener) throws JMSException
+{
+  log.debug("setMessageListener()");
+  Functors.forEach(queueReceivers_,
+      log,"set a message listner",
+      new AbstractFunctorDoIt()
+      {
+        public Object doIt(Object instance) throws JMSException
+        {
+          ((QueueReceiver)instance).setMessageListener(messageListener);
+          return null;
+        }
+      });
+  messageListener_=messageListener;
+}
+Et encore des lignes gagnées et des bugs en moins.
+Il nous reste à regarder comment construire une instance. Voici la méthode createConnectionConsumer() de la classe HAJMSQueueConnectionFactory. Il s’agit de la première méthode invoquée par un utilisateur de notre driver.
+public ConnectionConsumer createConnectionConsumer(final Queue queue, 
+    final String messageSelector, 
+    final ServerSessionPool serverSessionPool, 
+    final int maxMessage) throws JMSException
+{
+  log.debug("createConnectionConsumer()");
+  return new HAJMSConnectionConsumer(this,
+          queue,serverSessionPool,messageSelector,maxMessage,
+          (ConnectionConsumer[])Functors.build(connections_,
+          new ConnectionConsumer[connections_.length],
+          log,"create a connection cusumer",
+          new AbstractFunctorBuild(
+        {
+          public Object  createObject(int idx) throws JMSException
+          {
+            return ((QueueConnection)connections_[idx])
+              .createConnectionConsumer(queue,
+                                        messageSelector,
+                                        serverSessionPool,
+                                        maxMessage);
+          }
+        })
+      );
+}
+La méthode Functors.build() reçoit en premier paramètre un tableau d’objet à itérer, puis un tableau d’objet où placer les instances construite. Après le informations de log, nous livrons un functor ayant en charge de construire chaque instance. La méthode retourne le deuxième paramètre, les tableaux avec les instances construites. Les constructions ayant échoués sont repérée par la valeur null dans le tableau.
+Nous construisons alors une instance HAJMSConnectionConsumer() avec le géniteur, les paramètres de construction et toutes les instances construites par les autres drivers JMS agrégés. Puis nous retournons la référence retourné par le new. Le code semble difficile à lire, mais étant donné qu’il est systématique pour chaque méthode, il ne faut pas y prêter attention. Seul compte le contenu de la méthode createObject(). C’est la partie de code qui est différent pour chaque méthode de construction.
+Très peu de méthodes n’entrent pas dans les trois schémas : « pour chaque », « pour le premier », « construit ». Pour les cas particuliers, nous les avons codées à la main. Par exemple, il existe une méthode permettant d’itérer dans les messages d’une queue. Nous avons écrit un itérateur particulier qui saute d’une queue à une autre pour regrouper tous les messages de toutes les queues.
+En une journée, nous avons implémenté toutes les méthodes des interfaces JMS Queue. 117 méthodes !
+Pour résumer, les functors permettent d’entourer d’un algorithme un code inconnu.
+Tester le code
+Très bien. Nous pouvons écrire un test unitaire utilisant les API JMS, en exploitant un driver classique. Nous évitons d’utiliser le notre pour le moment.
+Une fois le test déverminé, nous modifions le driver utilisé pour exploiter le notre, en lui livrant un tableau de QueueConnectionFactory, initialisé avec les factories des queues à exploiter.
+factories[0]=new XXXQueueConnectionFactory(props);
+factories[1]=new XXXQueueConnectionFactory(props);
+factory=new HAJMSQueueConnectionFactory(factories);
+Nous cherchons à vérifier que notre driver fonctionne correctement lors de situation d’échec d’un des drivers sous-jacents. Comme faire cela ? Il n’est pas facile d’obtenir des erreurs lors de chaque invocation des méthodes.
+Utilisons les possibilités qu’offre la factorisation avancée de notre code ! Nous ajoutons, à des endroits stratégiques des trois méthodes génériques, la production aléatoire d’exceptions.
+if (random(100) < PERCENT_ERROR) 
+  throw new JMSException("Test HA");
+En choisissant de générer une exception dans 40% des invocations, nous pouvons tester le driver dans de nombreuses situations. Etant donné que nous simulons la perte d’un serveur, celui-ci étant en réalité toujours valide, il est possible de le réactiver immédiatement. De même, un paramètre de test permet d’indiquer le pourcentage de méthodes pouvant réactiver un serveur HS. Par exemple, une méthode sur deux (50%) peut réactiver un serveur. Ainsi, les mécanismes de reprises des instances se mettent en marche. Du point de vue du test unitaire, toutes ces perturbations doivent être invisibles, sauf si le hasard entraîne que tous les serveurs sont déclarés HS au même moment.
+En utilisant cette approche, de nombreux bugs ont été détectés. Pour pouvoir les retrouver, le générateur aléatoire garde un historique des valeurs et l’affiche à la fin du test. Il suffit d’injecter ces valeurs dans le générateur et de les lui faire rejouer, pour pouvoir partir à la chasse au bug. Très rapidement, en une demi-journée, les tests unitaires étaient systématiquement valides, dans des conditions que je n’aurais jamais imaginée. Par exemple, comment doit se comporter le code lorsqu’il désire ressusciter une instance et qu’il y a une exception à ce moment là ? De même, que faire si une instance à besoin d’une autre instance pour pouvoir se ressusciter ? Il faut auparavant, ressusciter l’autre instance. Sans les tortures-tests, je n’aurais pas imaginé et détecté ces situations.
+Nous pouvons alors ajouter une tache de fond en charge de détecter qu’un serveur HS revient à la vie.
+Généralisons
+Nous avons utilisé une stratégie de développement pour rendre hautement disponible un driver JMS qui ne l’est pas. Cela consiste à agréger plusieurs instances du même type dans une seule et à propager les modifications dans chaque instance. Nous avons identifié trois algorithmes à utiliser systématiquement pour implémenter cette approche. Nous avons utilisé la tactique des functors pour simplifier le code. Cela nous a permis de rédiger un driver JMS HD en moins d’une semaine. De plus, lors des phases de tests, nous avons bénéficié de notre approche pour pouvoir effectuer des tortures-tests. Finalement, les cent quatorze méthodes se résument essentiellement à trois.
+Cette approche peut être reproduite pour d’autres drivers. Par exemple, un driver JavaMail qui utiliserait plusieurs serveur SMTP et POP3, un driver JDBC dupliquant les mises à jours sur plusieurs bases de données, etc. Avec une bonne stratégie et une bonne tactique, ce qui semblait être un challenge difficile s’est révélé être beaucoup plus facile que prévu.
+Plus tard, lorsqu’un driver JMS HD sera disponible, l’architecture pourra être considérablement simplifiées. Une seule modification sera à apporter : la classe du driver JMS à utiliser. Notre code pourra être jeter sans ménagement. Il nous aura permis d’enrichir nos connaissances sur les tolérances aux pannes et sur l’application systématique des functors.
+Pensez aux functors lorsque vous souhaitez spécialiser finement des algorithmes complexes.

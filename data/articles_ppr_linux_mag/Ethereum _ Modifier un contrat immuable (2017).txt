@@ -1,0 +1,487 @@
+﻿Ethereum : Modifier un contrat Immuable
+  
+
+Dans un monde immuable, comment corriger un bug ?
+Par Philippe PRADOS - Aout 2017
+www.prados.fr
+
+
+Les différentes technologies de Blockchain (Bitcoin, Ethereum, etc.) consistent à proposer une solution permettant de négocier un consensus, entre de nombreuses parties, sur un état stable. Pour Bitcoin, il s’agit de se mettre d’accord sur l’état d’un livre de compte ; pour Ethereum, sur l’état d’un ordinateur virtuel mondial.
+Ethereum a la prétention de permettre la rédaction de contrats numériques, dont l’application est sous le contrôle du réseau et non d’une entité étatique. Des fonds peuvent être sous la responsabilité du contrat, dont le code décide ensuite sa distribution. Typiquement, le contrat peut servir de notaire, en gardant des fonds jusqu'à ce qu’une condition soit valide (délais, preuve de livraison, etc.).
+Ethereum accueil des contrats, constitués d’une adresse et d’un code destiné à une machine virtuelle spécifique (EVM). Chaque instruction à un coût en gaz, lui même converti en éthers, cotée sur différentes places de marchés. Il faut donc posséder quelques unités d’éthers pour pouvoir demander au réseau d’apporter des modifications à un contrat.
+Pour invoquer un contrat, il est nécessaire d’écrire une transaction et de l’envoyer au réseau. Ce dernier se charge d’exécuter le traitement, d’apporter des modifications sur l’état du contrat, et d’écrire à la suite de la chaîne de bloc, le nouvel état du contrat. Tous les serveurs participant au réseaux se mettent d’accord sur le nouvel état du contrat.
+Le principe de base d’un contrat Ethereum est d’avoir un code immuable, impossible à modifier ou à supprimer. Si le développeur ne l’a pas prévu, il n’est pas possible d'arrêter un contrat. Il s’applique dès qu’il est sollicité.
+En effet, lorsqu’un contrat est déposé dans la chaîne de bloc, il y est pour toujours. Toutes les instructions qui le compose peuvent être invoquées à tout moment, entraînant éventuellement une modification d’état du contrat, d’autres contrats liés, voir transférant des éthers vers un autre compte ou un autre contrat.
+* Un contrat déposé dans la blockchain ne peut être supprimé
+* Il peut être invoqué par n’importe quel utilisateur ou autre contrat
+* Le code d’un contrat ne peut pas évoluer
+* Seuls les données le peuvent
+Modifier l’état d’un contrat, c’est écrire les différences dans le prochain bloc
+Cette immutabilité est une excellente chose, car elle permet de garantir qu’aucune des parties prenantes du contrat ne pourra revenir sur ses engagements. C’est un élément essentiel de la sécurité d’Ethereum et contribue à sa valeur.
+Si j’accepte de signer un contrat où je m’engage à rembourser tel somme en éther si une condition ne s’est pas produite à telle date, il m’est impossible de répudier cela. Lorsque le délai sera passé, l’autre partie peut déclencher le versement des éthers présent en caution dans le contrat.
+C‘est super cool. Personne, pas même un pirate, ne pourra apporter des modifications au contrat. A tel point, que si le contrat est mal écrit, des éthers peuvent être inaccessibles à tout jamais.
+1. 1 Les trucs à savoirs sur la EVM et Solidity
+En pratique, les développeurs utilisent le langage de développement Solidity[1], permettant la rédaction simple de contrat. Le code Solidity est compilé dans un byte-code destiné à la machine virtuelle Ethereum (EVM).
+   1. 1.1 Ethereum VM (EVM)
+L’Ethereum Virtual Machine est très rustique. Elle propose des calculs sur des données de 256 bits (32 bytes) à l’aide d’une pile d’exécution (opérations sur 64 bits prévu pour une prochaine version). C’est à dire que les valeurs sont déposées sur une pile et les instructions consomment les données au dessus de la pile pour y déposer le résultat.
+Par exemple, la suite d’instruction suivante effectue une addition et place le résultat sur le sommet de la pile.
+PUSH1 0x42
+PUSH1 0x24
+ADD
+Il y a également des zones mémoires spéciales. La RAM, dédié à l’exécution de la transaction, commence à l’adresse zéro et augmente au fur et à mesure des besoins, par paquet de 32 bytes. Comme toutes les instructions de la machine virtuelle, cela coûte de l’énergie (1 gaz par 32 bytes).
+Les données persistantes dans le contrat (tous les attributs) sont mémorisé dans une table d’association entre 32 bytes pour la clé et 32 bytes pour la valeur. Les modifications sont sauvegardées dans le prochain bloc de la blockchain, après validation par la communauté.
+Le coût d’un attribut est simple : 20.000 gaz lorsqu’une valeur est créé (qu’elle passe de zéro à autre chose) ; 5.000 gaz lors de l’écriture d’un attribut déjà existant ; et une récupération de 15.000 gaz lorsqu’une valeur est effacées à zéro (delete).
+Lorsqu’une méthode est invoquée, une transaction est envoyée au contrat. On y trouve :
+* msg.sender : l'émetteur du message
+* msg.gas : Le gaz restant pour la suite du traitement
+* msg.data : Les paramètres de l’invocation du contrat
+* msg.sig : La signature de la méthode invoquée. Il s’agit en fait d’un calcul de hash sur le nom de la méthode, intégrant la liste des paramètres. Cela correspond aux quatre premiers octets de msg.data.
+* msg.value : éventuellement, une quantité de Wei (sous unité d’éther)
+Pour construire un contrat depuis l’extérieur de la blockchain, il faut invoquer le contrat zéro, avec en paramètre, le code et la description du nouveau contrat. Le code du contrat zéro se charge d’ajouter le nouveau contrat dans la chaîne de bloc et de retourner son adresse.
+Pour construire un contrat depuis un autre contrat, il est possible d’utiliser l’instruction CREATE de l’EVM. Cela est moins coûteux que depuis l’extérieur.
+Des instructions permettent à un contrat d’écrire des logs, dans quatre topics. Les logs sont des tableaux de bytes, associés à chaque contrat. Cela permet aux API Javascript ou autre, de récupérer des informations lorsqu’une transaction est validée par la communautés. C’est le canal privilégié pour les communication asynchrone entre les contrats et l’extérieure d’Ethereum.
+   1. 1.2 Solidity
+Par dessus la machine virtuelle, le langage Solidity propose de nombreux concepts complémentaires, pouvant être traduit en instruction de la machine virtuelle. Souvent, le code rédigé en Solidity est très éloigné du code compilé pour la EVM. Il est parfois important de comprendre la relation entre les deux, pour exploiter au mieux les avantages des deux modèles de programmation.
+Comme les instructions de la EVM fonctionnent en 256 bits, cela n'économise pas le coût  de sauvegarde des informations. Pour optimiser cela, Solidity se charge d’effectuer des opérations de masque binaire, pour pouvoir manipuler quelques bytes à la fois de chaque zone mémoire de 32 bytes. Par exemple, la méthode f() suivante :
+contract Test {
+    byte b;
+    function f() {
+        b=0xAA;
+    }
+}
+est compilé en cette longue suite d’instruction. Tout cela pour ne modifier QUE le premier octet des 32 bytes.
+// b = b AND NOT(0xFF) OR 0xAA
+PUSH 0        // Offset de l’attribut
+DUP1                 
+SLOAD         // Lecture de l’attribut de position 0
+PUSH FF        // Masque binaire pour un octet                
+NOT         // Inversion du masque (0xFFFFF....FF00)        
+AND         // Masque entre la donnée de l’attribut et le masque
+PUSH AA        // Valeur à écrire
+OR         // Or entre 0xAA et l’attribut moins le premier octet
+SWAP1         
+SSTORE         // Ecriture de l’attribut
+Cela fait beaucoup d’instruction, mais est bien moins chère que de mémoriser chaque octet dans un espace de 32 bytes en terme d’éther.
+Comme il n’y a qu’un seul point d’entrée pour un contrat, Solidity a décidé de consacrer les quatre premiers octets des paramètres de la transaction à l’identification de la méthode à invoquer. La valeur des octets correspondent à un bytes4(sha3("f(uint)") sur le nom de la méthode, complété par le type des différents paramètres.
+Le code du contrat commence par une sorte de switch, avec la signature de chaque méthode. Si aucune méthode ne correspond, alors la méthode par défaut est utilisée. C’est une méthode spéciale, n’ayant pas de nom ni de paramètre (function () {}).
+switch (msg.sig) {
+  case e1c7392a : // function init()
+    ...
+  case 2db12ac4 : // function changeToV2()
+        …
+  case 82692679 : // function doSomething()
+   …
+  default : // function () 
+   … 
+}
+La machine virtuelle n’a pas de notion de constructeur. Pour construire une instance, il faut envoyer une transaction vers le contrat zéro. Les datas sont alors considérées comme du code à exécuter. 
+Pour chaque contrat, le compilateur Solidity génère alors le code du constructeur, qui se charge de fournir le code du contrat à produire.
+Attention, si le code complet du constructeur est trop volumineux, le contrat ne peut être construit. Il faut alors séparer la construction en deux, en ajoutant une méthode init() par exemple.
+Solidity propose la notion de modifier. C’est un morceau de code encadrant un autre code. Il suffit d’annoter une méthode d’un modifier, pour que le contenu de la méthode soit encadré par le contenu du ou des modifier.
+modifier onlyOwner {
+    if (isOwner(msg.sender))
+        _;
+}
+
+function f() onlyOwner { 
+  ... 
+}
+Solidity propose une instruction throw, pour signaler une erreur dans un contrat. Comme il n’existe pas d’équivalent dans la machine virtuelle, le code généré invoque un saut vers une adresse mémoire invalide. Cela génère une erreur lors de l’exécution, ce qui est le but recherché. Ne vous étonnez pas alors, de recevoir une erreur de type “saut à une adresse invalide”.
+Solidity propose la notion d’event. Ce sont en fait des logs pour la machine virtuelle. Ils permettent d’informer le code Javascript ou autre, à l’écoute de la chaîne, lorsqu'une méthode d’un contrat est invoquée. Des filtres permettent d’attendre l’acquittement d’un traitement dans la blockchain.
+Le hash de la signature de l’événement est utilisé comme nom de topic, pour l’indexation des événements.
+Parmi les instructions avancées de la machine virtuelle Ethereum, il y a trois instructions spéciales : 
+* call pour invoquer un autre contrat et le modifier
+* callcode pour utiliser le code d’un autre contrat, sur l’état du contrat appelant, en indiquant le contrat actuel comme à l’origine de l’invocation.
+* delegatecall pour utiliser le code d’un autre contrat, sur l’état du contrat appelant, en gardant l’identité de l’invocation de la méthode d’origine.
+En fait, delegatecall est un bug fixe de callcode, afin de garder le msg.sender valide.
+Un dernier point à savoir. Pour maîtriser la mémoire nécessaire à l’invocation des méthodes, l’attribut avec la clé 0x40 est utilisé par Solidity. La valeur indique la plus haute adresse mémoire utilisée par les méthodes du contrat.
+Nous allons utiliser toutes ces particularités pour atteindre notre objectif.
+1. 2 Amender un contrat ?
+Un contrat est immuable, mais parfois, on aimerait bien pouvoir le modifier, avec l’accord de toute les parties si nécessaires. On aimerait pouvoir publier une nouvelle version du contrat, pour corriger un bug par exemple.
+Du point de vue scénario d’usage, on peut imaginer la situation suivante : Deux personnes signent un contrat numérique qui est régis par la loi. La loi peut évoluer remettant en cause le contrat. Il faut donc le modifier, avec l’accord des deux personnes.
+Il est également possible d’ajouter un utilisateur étatique : l’état.
+Le contrat est alors construit avec trois propriétaires : les deux personnes et l’état. Il est paramétré pour que 2 propriétaires seulement soient nécessaire pour modifier le contrat.
+Ainsi, les deux personnes peuvent le modifier ou bien l’une d’entre elle avec l’aval de l’état (voir figure 1).
+  
+
+Fig. 1 : Contrat multi-owners
+C’est à ce chantier que nous nous sommes attelé. Comment modifier le comportement d’un contrat pourtant immuable ?
+Plusieurs approches peuvent être envisagées :
+* Supprimer le contrat actuel et le remplacer par un autre
+* Permettre l’ajout d’avenant au contrat
+* Utiliser un proxy spécifique ou générique
+* Combiner toutes les approches
+Pour vous permettre de tester tout cela facilement, nous vous proposons d’utiliser browser-solidity présent à cette adresse[2].
+En ajoutant le plugin MetaMask à chrome (voir figure 2), vous pouvez sélectionner la blockchain de test, demandez gratuitement quelques éthers sur ce réseau pour tester le code dans la vrai vie.
+  
+
+Fig. 2 : Plugin Chrome MetaMask.
+Sans le plugin, dans l’onglet représentant une boîte, sélectionnez Javascript VM. Ainsi, vous pouvez compiler et tester tout le code, uniquement dans le navigateur ! Une implémentation de l’EVM est alors disponible localement (voir figure 3). Et pas besoin d’Ether !
+  
+Fig. 3 : Selection de l’EVM
+1. 3 Remplacer un contrat
+Comme un contrat ne peut pas être modifié, il doit être possible de le remplacer. Avec l’accord de toute les parties, le contrat précédent est annulé pour être remplacé par un nouveau.
+Notez que dans les schémas, les textes en italiques sont des propriétés ou des méthodes techniques, ne faisant pas partie du contrat d’origine. Les textes en gras sont des ajouts au contrat d’origine (voir figure 4).
+  
+
+Fig. 4 : Proposer un nouveau contrat
+Pour qu’il soit possible de modifier un contrat, il faut le prévoir dans le contrat d’origine.
+/**
+ * The version 1 of the contract.
+ * The attr is initialized to 1000.
+ * The method doSomething() return attr + version = 1001
+ */
+contract ContractV1 {
+    uint constant private version=1;
+    uint public attr=1000;
+    
+    /** return attr+newAttr+version (1001). */
+    function doSomething() constant returns(uint) {
+        return attr+version;
+    }
+
+
+    // -- Technical functions and attributs
+    /** kill this version. */
+    function replacedBy(address newVersion) {
+        selfdestruct(newVersion);
+    }
+    
+}
+
+
+/**
+ * The version 2 of the contract.
+ * To preserve all the attributs from the v1 version, this version IS a ContractV1. 
+ * All methods can be rewrite, new one can be added 
+ * and some attributs can be added.
+ * 
+ * The newAttr is initialized to 100.
+ * The method doSomething() return attr + newAtttr + version = 1102
+ */
+contract ContractV2 {
+    uint constant private version=2;
+    uint attr;
+    uint newAttr=100;
+    
+    /** return attr+newAttr+version (1102). */
+    function doSomething() constant returns(uint) {
+        return attr+newAttr+version;
+    }
+
+
+    /** return 42. Another method in version 2. */
+    function doOtherThing() constant returns(uint) {
+        return 42;
+    }
+
+
+    // -- Technical functions and attributs
+    /**
+     * Propagate the states from the v1 to v2.
+     */
+    function ContractV2(ContractV1 origin) {
+        attr=origin.attr();         // Copy the current state of v1
+        origin.replacedBy(this);
+    }
+
+
+    // -- Technical functions and attributs
+    /** kill this version. */
+    function replacedBy(address newVersion) {
+        selfdestruct(newVersion);
+    }
+}
+Le constructeur de la nouvelle version doit avoir accès aux attributs du contrat d’origine pour les récupérer.
+J’ai omis les règles de sécurités car nous les évoquerons plus loin. Il faut en effet ajouter des privilèges dans la méthode replaceBy(), pour que seul les parties prenante du contrat puissent accepter la nouvelle version du contrat.
+Vous pouvez tester cela en ligne ici[3].
+  
+
+Fig. 5 : Tester le contrat
+N’oubliez pas de sélectionner Javascript VM pour un test en local au navigateur. En cliquant dans l’ordre indiqué figure 5, vous créez un contrat, l'initialisez et invoquez la méthode doSomething() première version, pour récupérer 1001 (attr + version).
+Ensuite, il est temps de modifier la version et de s’assurer que le comportement de doSomething() est bien différent (attr + newAttr + version = 1102). Il est alors possible d’invoquer une nouvelle méthode doSomething(), absente de la première version du contrat.
+Le code du test unitaire est celui-ci:
+contract A_UnitTest {
+    ContractV1 aContractV1;
+    ContractV2 aContractV2;
+    
+    /**
+     * Initialise useContract with a ContractV1.
+     */
+    function init() {
+        aContractV1=new ContractV1();
+    }
+
+
+    /** 
+     * Invoke the method 'doSomething()', valide with a contract v1 or v2. 
+     * The caller must be known the reference of the current version.
+     */
+    function doSomething() constant returns(uint) {
+        return ((address(aContractV2) == 0) 
+            ? aContractV1.doSomething() 
+            : aContractV2.doSomething());
+    }
+    
+    /** Invoke a method 'doOtherThing()', only valide with a contract v2. */
+    function doOtherThing() constant returns(uint) {
+        if (address(aContractV2) == 0) throw;
+        return aContractV2.doOtherThing();
+    }
+    
+    /** Change to V2. */
+    function changeToV2() {
+        aContractV2=new ContractV2(aContractV1);
+        aContractV1.replacedBy(aContractV2);
+        delete aContractV1;
+    }
+}
+Le premier inconvénient de cette approche est que la référence du contrat n’est pas maintenu lors du changement de version. Si d’autres contrats utilisent toujours une référence vers ContractV1, ils vont planter lorsqu’ils voudront l’invoquer. En effet, le contrat est détruit lorsqu’il est remplacé. Le test unitaire doit choisir la version du contrat à invoquer.
+Le deuxième inconvénient est que les événements (event) ne sont plus émis du contrat v1, après le changement de version. Les applications en écoute d’événements doivent également traiter cela.
+Le troisième inconvénient est que les données stockées dans le ContractV1 doivent être déplacées dans le ContractV2. Cela peut coûter beaucoup de gaz, voir plus que ce qui est disponible pour une méthode. Même les soldes en éthers doivent être déplacées d’un contrat à l’autre, ce qui présente un grand risque de sécurité.
+Une approche pour contourner cette difficulté consiste à proposer un contrat “base de donnée” suffisamment générique. Ce contrat est référencé par les versions 1 et 2 pour y stocker les données persistantes (voir figure 6).
+  
+
+Fig. 6 : Contrat avec base de donnée
+Le code est testable ici[4].
+Il n’est plus possible d’avoir des états dans les contrats v1 et v2. Tout passe par le ContractDB. Les fonds restent dans les contrats. Il faut encore les déplacer. Cherchons une meilleure approche.
+1. 4 Avenant spécifique
+Finalement, si on cherche à faire l’analogie avec le monde juridique, modifier un contrat c’est ajouter un avenant, signé par toute les parties. Pourquoi ne pas proposer ce modèle ? (voir figure 7)
+  
+
+Fig. 7 : Contrat avec base de donnée
+L’idée est la suivante. S’il n’y a pas d’avenant, les clauses du contrat s’applique. S’il y a un avenant, alors il faut appliquer les clauses de l’avenant. Ce dernier peut éventuellement considérer les clauses d’origines comme inchangées. Si un avenant est disponible, il est interdit d’invoquer directement la clause du contrat. Il faut obligatoirement passer par l’avenant.
+Dans chaque méthode du contrat, il faut ajouter un code pour s’assurer de la présence de l’avenant.
+function doSomething() constant returns(uint) {
+    if ((address(amendment) != 0) && (msg.sender != address(amendment))) { 
+        return amendment.doSomething();
+    }
+    else
+        return attr+version;
+}
+En effet, il est pas possible d’utiliser un modifier Solidity pour cela, car chaque méthode à une signature spécifique.
+Dans ce scénario, l’avenant possède son propre état, différent de l’état du contrat. L’avenant et le contrat doivent travailler en étroite collaboration pour se partager les attributs.
+La démonstration est ici[5]
+Malheureusement, les événements peuvent être émis du contrat ou de l’avenant et il n’est pas possible d’ajouter de nouvelles méthode au contrat d’origine.
+1. 5 Proxy spécifique
+Une fois dans la blockchain, un contrat possède une adresse unique. Les différents partenaires connaissent cette adresse. Ils l’utilisent pour manipuler le contrat.
+Et si le contrat référencé n’est qu’un proxy vers l’implémentation courante du contrat ? Il suffit de modifier la référence vers le contrat cible dans le proxy pour modifier le comportement de ce dernier (voir figure 8).
+  
+
+Fig. 8 :Proxy spécifique
+C’est cool, bien que très classique. Mais comment implémenter cela ? La première idée est de proposer une interface commune entre le proxy et les implémentations.
+/**
+ * Interface shared by Proxy, ContractV1 and ContractV2.
+ */
+contract Interface {
+    /** return uint, depend of the current version. */
+    function doSomething() constant returns(uint);
+}
+Ensuite, le proxy ainsi que les différentes versions, implémentent cette interface. 
+/** Delegate to the current version. */
+function doSomething() constant returns(uint) {
+   return currentVersion.doSomething();
+}
+Il est facile de tester cela avec browser-solidity ici[6].
+Le test unitaire se charge de caster correctement les contrats.
+/** 
+ * Unit test.
+ * 
+ * After created an instance, 
+ * - call 'init()'
+ * - call 'doSomething()' return 1001
+ * - call 'changeToV2'
+ * - call 'doSomething()' return 1102
+ * - call 'doOtherthing()' return 42
+ */
+contract A_UnitTest {
+    /** Current proxy. */
+    Interface aContract;
+
+
+    function init() {
+        aContract=Interface(new Proxy(new ContractV1()));
+    }
+    
+    /** Invoke the method 'doSomething()', valide with a contract v1 or v2. */
+    function doSomething() constant returns(uint) {
+        return aContract.doSomething();
+    }
+    
+    /** Invoke a method 'doOtherThing()', only valide with a contract v2. */
+    function doOtherThing() constant returns(uint) {
+        throw; // Not implemented
+    }
+    /** Change to V2. */
+    function changeToV2() {
+        ContractV1 contractV1=ContractV1(Proxy(aContract).currentVersion());
+        Proxy(aContract).changeVersion(new ContractV2(contractV1));
+    }
+}
+Nous avons résolu le problème de la référence du contrat d’origine par d’autres contrats. Le monde extérieur référence le proxy et ce dernier ne bouge pas.
+Nous n’avons pas à distribuer les attributs entre le contrat et l’avenant.
+Mais, nous ne pouvons plus ajouter de nouvelles méthodes dans la nouvelle version du contrat. En effet, le proxy définit les méthodes décrites dans l’interface et ne peut plus évoluer. Il est possible de modifier l’implémentation des méthodes dans la version 2 du contrat, mais pas d’ajouter des méthodes.
+De plus, il est encore nécessaire de faire migrer les données entre les contrats, avec les limites que nous avons évoquées.
+Comment résoudre cela ? C’est possible, mais il va falloir sortir l’artillerie lourde.
+1. 6 Proxy générique
+Il est tentant de chercher à propager le message de la transaction vers la version du contrat ! Ainsi, quelque soit le message reçu, c’est le contrat cible qui peut le traiter. Il est ainsi possible d’ajouter de nouvelles méthodes sans devoir revoir le proxy.
+Bon, pour cela, il faut sortir du code en assembleur. Solidity permet cela. Cool.
+Nous devons récupérer le message, l’adresse du contrat cible, puis donner une zone mémoire libre pour récupérer le résultat de la méthode invoquée afin de le propager à l’appelant du proxy. Voici ce code.
+function callCode(address target, int returnSize) internal {
+    assembly {
+      let brk := mload(0x40)                     // Special solidity slot with top memory
+      calldatacopy(brk, 0, calldatasize)  // Copy data to mem at offset brk
+      let retval := call(sub(gas,150)
+                         ,target          //address
+                         ,0               //value
+                         ,brk             //mem in
+                         ,calldatasize    //mem_insz
+                         ,brk                    // reuse mem
+                         ,returnSize)     // arbitrary return size
+       // 0 == it threw (jump to bad destination)
+       jumpi(0x00,iszero(retval))         // Throw (access invalid code)
+       return(brk,returnSize)             // Return returnSize to the caller
+  }
+}
+Comme indiqué, il faut savoir que Solidity identifie la taille mémoire qu’il utilise pour le contrat à l’emplacement 0x40. C’est l’équivalent de brk(2) en C. La valeur stockées à cette référence permet de trouver une zone mémoire qui n’est utilisée par aucune méthode du contrat.
+Le code assembleur commence par récupérer le top de la mémoire pour y copier les datas du message de la transaction (calldatacopy). Ensuite, il invoque le contrat target en lui indiquant la zone mémoire pour l’input. Il indique également la même zone mémoire pour récupérer le résultat. Comme il n’est pas possible de savoir à l’avance la taille maximum d’un retour possible d’une méthode du contrat cible, nous laissons l’utilisateur définir le paramètre returnSize. La valeur 32 est généralement suffisante. Enfin, le code retourne directement cette valeur à l’appelant.
+Comment proposer un proxy générique maintenant ? En utilisant la fonction fall-back. Lorsqu'une fonction ne possède aucun paramètre ni nom, elle est invoquée pour toute les méthodes dont la machine virtuelle ne trouve pas d’implémentation. C’est comme cela que fonctionne le code généré par Solidity. C’est d’ailleurs cette méthode qui est invoquée lors du dépôt d’éther dans le contrat. Nous n’avons qu'à invoquer notre méthode en assembleur pour toutes les méthodes du proxy ! (voir figure 9)
+/** Delegate all call to the current version. */
+function () payable {
+  callCode(currentVersion,32);
+}
+  
+
+Fig. 9 : Proxy générique
+Et voilà, nous avons maintenant un proxy générique, capable d’invoquer de nouvelles méthodes d’une version 2 de notre contrat.
+Vous pouvez tester cela ici[7]. 
+Cette une approche sympathique. Elle présente néanmoins plusieurs défauts. 
+* La version 2 du contrat ne possède pas les données de la version 1. Il faut transférer l’état de la version 1 dans la version 2 pour reprendre le contrat.
+* Les événements émis par le contrat v1 ne viennent pas de la même origine que les événements venant du contrat v2.
+1. 7 La solution ultime
+Nous pouvons essayer de mélanger différentes approches pour répondre à tous les besoins. Et si le Proxy se charge de maintenir les données de toutes les versions ? Utilisons delegateCall à la place de call.
+function propagateDelegateCall(address target, int returnSize) internal {
+  assembly {
+    let brk := mload(0x40) // Special solidity slot with top memory
+    calldatacopy(brk, 0, calldatasize)      // Copy data to memory at offset brk
+    let retval := delegatecall(sub(gas,150)
+      ,target                             //address
+      ,brk                                // memory in
+      ,calldatasize                       // input size
+      ,brk                                // reuse mem
+      ,returnSize)                        // arbitrary return size
+    // 0 == it threw, by jumping to  bad destination (00)
+    jumpi(0x00,iszero(retval)) // Throw (access invalid code)
+    return(brk,returnSize) // Return returnSize from memory to the caller
+  }
+}
+Pour cela, il faut bien faire attention au fait que le Proxy, et les différentes versions du contrat possèdent les mêmes attributs, dans le même ordre. La super-classe Versionable permet de mutualiser les attributs entre le Proxy et les contrats. De même, faire hériter le contrat v2 du contrat v1 permet de garantir que tous les attributs de la version 1 seront présent dans la version 2 (voir figure 10).
+  
+
+Fig. 10 : Proxy versionable
+Attention, il faut bien comprendre ce qu’il se passe. Le proxy ne possède pas de méthode, mais va gérer les attributs des contrats v1 et v2, dont les méthodes sont présentes dans les implémentations correspondantes. Si on inspecte l’instance ContractV1, aucun attribut n’est valorisé. De même pour ContractV2.
+La construction des contrats s’effectue en deux étapes, car le constructeur n’est pas une méthode comme les autres. En effet, construire une instance est un traitement spécial. Il est envoyé au contrat de numéro zéro de la blockchain. Le code du constructeur n’est pas disponible avec le contrat. Il n’est donc pas possible de le réutiliser pour initialiser le proxy.
+Nous devons alors utiliser une méthode init() qui jouera le rôle de constructeur. Il ne faut pas oublier de l’invoquer, juste après la création de l’instance du contrat v1 et du contrat v2.
+/** 
+ * Unit test.
+ * 
+ * After created an instance, 
+ * - call 'init()'
+ * - call 'doSomething()' return 1001
+ * - call 'changeToV2'
+ * - call 'doSomething()' return 1102
+ * - call 'doOtherthing()' return 42
+ */
+contract A_UnitTest {
+    event VersionChanged(Versionable version);
+    
+    /** A reference to a version of contract, via a proxy. */
+    ContractV1 private aContract; // FIXME: aContract
+
+
+    /**
+     * Initialise useContract with a ContractV1 encapsulated by a proxy.
+     */
+    function init() {
+        // Create an instance of version 1
+        ContractV1 v1=new ContractV1();
+        // Encapsulate this instance in a proxy
+        Proxy proxy=new Proxy(v1);
+        // Cast the proxy to ContractV1
+        aContract=ContractV1(proxy);
+        // Init the instance via the proxy
+        aContract.init();
+    }
+    
+    /** Invoke a method valide with a contract v1 or v2. */
+    function doSomething() constant returns(uint) {
+        return aContract.doSomething();
+    }
+
+
+    /** Invoke a method only valide with a contract v2. */
+    function doOtherThing() constant returns(uint) {
+        return ContractV2(aContract).doOtherThing();
+    }
+
+
+    /** Change to V2. */
+    function changeToV2() {
+        // Create an instance of version 2
+        ContractV2 v2=new ContractV2();
+        // Cast the current contract to be a Proxy
+        Proxy proxy=Proxy(aContract);
+        // Change the delegate instance to v2.
+        proxy.changeVersion(v2);
+        // Init the version 2 via the proxy.
+        aContract.init();
+    }
+}
+L’intégralité du code est ici[8]
+Ce dernier modèle répond à toute les exigences:
+* La référence du contrat n’évolue pas, même en cas de changement d’implémentation
+* Il est possible d’ajouter de nouvelles méthodes ou de nouveaux attributs dans une nouvelle version du contrat
+* Il n’est pas nécessaire de migrer les données entre les versions
+* Les événements émis par le code des contrats V1 ou V2 viennent bien du proxy
+* Les inconvénients de cette approche sont les suivants :
+* Il n’est pas possible de supprimer un attribut (sauf à faire un delete sur ce dernier, dans le contrat V2)
+* Il est nécessaire de séparer le constructeur de la méthode init()
+* Cela présente un surcoût de 735 gaz pour chaque invocation.
+1. 8 Modifier un contrat avec l’accord de tous
+Un contrat est généralement signé entre deux ou plusieurs parties. Conceptuellement, il est dangereux de permettre à une seule des parties de pouvoir apporter des modifications. 
+Par exemple, imaginons un contrat entre une entreprise Acme et un utilisateur Phil. Si Acme peut modifier le contrat qui lie Acme et Phil sans l’accord de Phil, cela casse toute la sécurité proposée par la blockchain. Acme peut unilatéralement récupérer tous les fonds, sans que Phil puisse s’y opposer. Même sans volonté de nuire, si Acme se fait voler sa clé privée, le pirate peut modifier le contrat et voler les fonds, en se faisant passé pour Acme.
+Donc, il est indispensable de protéger le contrat de toute modification sans l’accord de n partie parmi m.
+Le wallet Myst proposé par Ethereum propose un portefeuille pouvant posséder plusieurs signataires. Il est possible de le paramétrer pour qu’un minimum de signataire soit nécessaire pour invoquer certaines méthodes.
+L’idée est la suivante. Lorsqu’une méthode protégée est invoquée, la transaction décrivant l’appel est mise de cotées. Si le même appel est effectué par une autre partie du contrat, avec exactement les mêmes paramètres, un compteur est incrémenté. Lorsque suffisamment de partie confirment leurs souhait d’invoquer la même méthode, avec les mêmes paramètres, alors elle est réellement invoquée.
+Le code permettant de gérer de multiples signatures est disponible dans les source d’Ethereum. La lecture de ce code est très instructif. Un tableau de bit est construit lorsqu’une requête est demandé, avec un bit par signataire.
+Comment utiliser ce code ? Il suffit d’hériter de MultiOwned, d’enrichir le constructeur et d’ajouter une protection aux méthodes sensibles.
+Vous retrouverez ici[9] la version protégée du Proxy, permettant à plusieurs owners de se mettre d’accord sur la nouvelle version du contrat.
+Pour tester ce code, il faut :
+* Créer une instance du test unitaire
+* Invoquer init()
+* Invoquer doSomething() pour récupérer 1001 (version 1 du traitement)
+* Demander le changement de version via l’utilisateur 1 ( user1_changeToV2() )
+* Confirmer la demande de changement en invoquant de même changeVersion() avec strictement les mêmes paramètres, mais via l’utilisateur 2 ( user2_changeToV2() )
+* Invoquer doSomething() pour récupérer 1102 (version 2 du traitement)
+* et enfin doOtherthing() pour confirmer qu’il est possible d’ajouter une nouvelle méthode.
+Pour retrouver toutes les versions, c’est ici[10] 
+1. 9 Conclusion
+Notre recherche de solution, vers différentes pistes, nous a finalement amené à proposer une solution générique simple et de bon goût. Elle utilise tout plein de spécificités de la machine virtuelle et des choix d’implémentations de Solidity:
+* Utiliser le fait qu’un Cast est possible vers n’importe quelle adresse de contrat. Cela permet de faire passer le Proxy comme un ContractV1 ou ContractV2.
+* Utiliser la méthode par défaut, lorsqu’une méthode n’est pas identifiée par le contrat
+* Utiliser l’attribut à l’adresse 0x40 pour identifier une zone mémoire disponible pour déléguer le traitement
+* Utiliser l’assembleur pour invoquer une méthode d’un autre contrat, et récupérer la valeur de retour avant de la propager à l’appelant
+* Utiliser la délégation pour que les événements des différentes implémentations viennent biens du Proxy.
+Nous vous proposons une solution générique de quelques lignes, permettant de limiter au maximum les impacts de la mise à jour d’un contrat.
+Finalement, Ethereum propose des contrats immuables, si on veut. Avec un peu d’effort, on peut également faire autrement.
+________________
+[1] http://solidity.readthedocs.io
+[2] http://ethereum.github.io/browser-solidity
+[3] https://goo.gl/9vbjw7
+[4] https://goo.gl/8L1XSE
+[5] https://goo.gl/7GFj0U
+[6] https://goo.gl/s5n2ei
+[7] https://goo.gl/N3liZD
+[8] https://goo.gl/cQLrFr
+[9] https://goo.gl/eJFbQU
+[10] https://goo.gl/eJFbQU

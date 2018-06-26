@@ -1,0 +1,202 @@
+﻿Les briques pour développer une place de marché pour Android
+  
+
+Dans le HS consacré à Android, nous avons élaboré une application complète. Nous allons maintenant nous focaliser sur des trucs et astuces dans le développement sous d'Android, permettant de réaliser une place de marché.
+Par Philippe PRADOS - 2011
+www.prados.fr
+Dans cette série d'articles, nous allons ébaucher les différentes techniques qu'il faut maîtriser pour pouvoir proposer une place de marché convenable, indépendamment de l'ergonomie ou de la qualification des applications publiées.
+Les techniques d'installation
+Le système d'exploitation Android se répand comme une épidémie de bactérie Escherichia coli sur des terminaux de plus en plus exotiques. Certains d'entre-eux ne peuvent proposer la place de marché de Google, car ils ne respectent pas les contraintes minimales imposées pour cela, ou parce qu'ils ne le souhaitent pas pour des raisons commerciales.
+Les versions Android embarquées dans les véhicules par exemple, auront certainement une place de marché spécifique pour des contraintes de sécurités de la conduite. On ne propose pas une application pour un véhicule comme une application pour téléphone.
+Les téléphones fixes Android ou les aquariums (http://goo.gl/emAbX) ne peuvent pas proposer la Google Market vue leurs designs spécifiques. Ils ne respectent pas le cahier des charges imposé par Google.
+Comment proposer une place de marchés ? Plus exactement, comment gérer l'installation et la désinstallation d'une application Android ? Il existe plusieurs APIs pour cela. Certaines sont disponibles pour n'importe quelle application, d'autres ne peuvent être accédées qu'a l'intégrateur de la plate-forme.
+Installation visible
+Pour des raisons évidentes de sécurité, il n'est pas possible d'installer une application sans accord de l'utilisateur et sans lui présenter les privilèges qu'elle désire. Sinon, n'importe quelle application pourrait en installer une autre ayant tous les privilèges.
+Le premier jeu d'API utilise alors l'interface utilisateur pour demander confirmation de l'installation.
+Une activité nous est proposé pour cela. Il faut l'invoquer en indiquant l'URI du package et son type MIME. Le resolveur d'intention détermine alors l'application et l'activité à déclencher pour demander à l'utilisateur de vérifier les privilèges demandés avant d'effectuer l'installation.
+final Intent intent = new Intent(Intent.ACTION_VIEW);
+intent.setDataAndType(Uri.fromFile(new File(filename)),
+  "application/vnd.android.package-archive");
+intent.setFlags(Intent.FLAG_FROM_BACKGROUND);
+startActivity(intent);
+Cela va présenter à l'utilisateur la page classique indiquant les privilèges exigés par l'application.
+  
+
+L'utilisateur peut alors accepter ou refuser l'installation. Puis, le programme s'installe ou une erreur est déclenchée en cas difficultés.
+Il est possible de suivre le cheminement de l'installation. Pour cela, il faut être à l'écoute de messages Broadcasts. Ce sont des messages envoyés à toutes les applications qui en font la demande.
+Nous devons déclarer un filtre d'intention, sur les actions PACKAGE_ADDED et PACKAGE_INSTALL. Puis nous enregistrons un BroadcastReceiver. La méthode onReceive() recevra alors des intentions à chaque étape de l'installation.
+IntentFilter filter = new IntentFilter();
+filter.addAction(Intent.ACTION_PACKAGE_ADDED);
+filter.addDataScheme("package");
+final BroadcastReceiver packageListener=new BroadcastReceiver()
+{
+  @Override
+  public void onReceive(Context context, Intent intent)
+  {
+    final String action=intent.getAction();
+    if (Intent.ACTION_PACKAGE_ADDED.equals(action))
+    {
+     // Cool, il a accepté
+     InstallApkActivity.accept=true;
+     // TODO :...
+    }
+  }
+};
+registerReceiver(packageListener, filter);
+Mais, il n'est apparemment pas possible de savoir si l'utilisateur a refusé l'installation ! En effet, il n'y a pas de message spécifique pour cela.
+Nous pouvons contourner le problème en utilisant une astuce. Une activité spéciale est invoquée avant l'activité d'installation. Le lancement de l'activité spéciale déclenche immédiatement le déclenchement de l'activité d'installation.
+En cas d'abandon de l'installation, l'utilisateur retourne à l'activité précédente, c'est-à-dire cette activité spéciale. Un onRestart() est déclenché. Ce dernier peut demander un finish() pour terminer l'activité spéciale.
+Nous partons de l'hypothèse que si cette activité spéciale reçoit l’événement onDestroy(), avant la réception d'un message ACTION_PACKAGE_INSTALL, c'est que l'utilisateur à abandonné l'installation.
+Nous avons un risque que l'activité spéciale soit tuée lors de l'installation. Nous ne pourrions alors pas la suivre. Nous ajoutons alors un peu de code pour demander au framework Android de ne pas nous tuer. En effet, comme nous déclenchons un autre processus, nous ne sommes à l'abri de rien. Le drapeau PackageManager.DONT_KILL_APP va nous aider.
+public class InstallApkActivity extends Activity
+{
+  public static final String EXTRA_FILENAME="filename";
+  
+  public static boolean accept=false;
+  
+  @Override
+  protected void onCreate(Bundle savedInstanceState)
+  {
+    super.onCreate(savedInstanceState);
+   // Keep alive
+    PackageManager packageManager=getPackageManager();
+    packageManager.setComponentEnabledSetting(getComponentName(),
+      PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+      PackageManager.DONT_KILL_APP);
+    startRealInstallApkActivity();
+  }
+
+
+  private void startRealInstallApkActivity()
+  {
+    final Intent intent = new Intent(Intent.ACTION_VIEW);
+    String filename=getIntent().getStringExtra(EXTRA_FILENAME);
+    intent.setDataAndType(Uri.fromFile(new File(filename)),
+      "application/vnd.android.package-archive");
+    intent.setFlags(Intent.FLAG_FROM_BACKGROUND);
+    startActivity(intent);
+  }
+  @Override
+  protected void onRestart()
+  {
+    super.onRestart();
+    finish();
+  }
+  @Override
+  protected void onDestroy()
+  {
+    super.onDestroy();
+    if (!accept)
+    {
+        // Il refuse l'installation
+        //TODO ...
+    }
+  }
+}
+Cette activité doit être déclarée avec certains drapeaux spécifiques, afin d'avoir un cycle de vie conforme à nos besoins.
+<activity android:name="InstallApkActivity"
+  android:launchMode="singleInstance"
+  android:noHistory="false"
+>
+</activity>
+Cela nous permet d'installer une application à partir d'une autre, avec l'accord de l'utilisateur. Nous sommes capable de suivre tout le processus géré par une autre activité, et même de savoir si l'utilisateur à finalement refuser de l'installer.
+Ceci est une bonne base pour la réalisation d'une place de marché.
+Installation silencieuse
+Comment faire une installation silencieuse comme le fait Google Market lors de l'installation à partir de son site Web ? En fait, le Market n'utilise alors pas ce type de code, mais des APIs cachées présentes dans le framework, et s'occupant réellement de l'installation.
+Pour pouvoir les invoquer, il faut plusieurs conditions. Savoir compiler un code qui utilise ces API cachées et obtenir le privilège android.permission.INSTALL_PACKAGES. Ce privilège est spécial. Il ne peut être accordé à une application qu'a deux conditions : soit il s'agit d'un package présent dans le répertoire /system/app, ou bien il s'agit d'un package signé avec la signature de la plate-forme. Le répertoire /system/app est un répertoire en lecture seule. Les applications qui s'y trouvent ont été sélectionnées par l'intégrateur, lors de la réalisation de l'image du terminal. Un accès root permet de remonter cette partition en lecture/écriture pour y placer votre application. Très utile pour les tests.
+Android utilise des API publics, que vous connaissez tous. Elles sont documentées dans le SDK. Mais, il existe également des API non documentés, qui sont exclus du fichier android.jar servant à la compilation des applications. Néanmoins, ces API sont présentes à l'exécution par une introspection par exemple.
+Dans notre cas, il n'est pas possible d'utiliser cette approche, car nous avons également besoin d'avoir accès à une classe cachée. Nous devons rédiger une classe héritant d'une classe cachée. L'introspection ne nous est pas utile.
+Utiliser les API cachées
+Nous allons enrichir le fichier android.jar avec les classes qui nous manque. Ainsi, nous pourrons compiler sans problème notre code.
+Nous devons partir des sources d'Android, disponible comme ceci :
+$ mkdir ~/bin
+$ PATH=~/bin:$PATH
+$ curl https://android.git.kernel.org/repo > ~/bin/repo
+$ chmod a+x ~/bin/repo
+$ mkdir WORKING_DIRECTORY
+$ cd WORKING_DIRECTORY
+$ repo init -u git://android.git.kernel.org/platform/manifest.git
+Après avoir validé votre nom et votre e-mail, vous pouvez demander la synchronisation du répertoire avec les sources.
+$ repo sync
+Il faut ensuite beaucoup de patience et de temps pour les récupérer. Nous allons maintenant les compiler.
+$ . build/envsetup.sh
+$ make
+Encore quelques heures et cela sera bon.
+Nous avons besoins des classes suivantes, avec leurs inners-classes respectives :
+* android.content.pm.IPackageInstallObserver
+* android.content.pm.PackageManager
+Elles sont présentent ici :
+./out/target/common/obj/JAVA_LIBRARIES/android_stubs_current_intermediates/classes
+Une fois ces classes compilées il faut les ajouter au fichier android.jar de la plate-forme de compilation. Vous les trouverez dans <android-sk>/platforms/android-*. Il suffit alors d'ajouter les fichiers .class produite par la compilation de ces deux classes dans les archives respectives, en faisant bien attention de les placer dans les bons répertoires.
+Nous voici fin prêt à utiliser les API cachées.
+Utilisation des API cachées
+Nous profitons des nouvelles méthodes dans la classe PackageManager. En déclarant une sous-classe de  IPackageInstallObserver.Stub, nous pouvons suivre l'évolution de l'installation. Un returnCode à 1 indique que l'installation s'est correctement effectuée (voir les sources de PackageManager)
+IPackageInstallObserver obs=new IPackageInstallObserver.Stub()
+{
+  @Override
+  public void packageInstalled(String packageName, int returnCode)
+   throws RemoteException
+  {
+      if (returnCode==1))
+      {
+        // Cool, le package est installé !
+     }
+  }
+
+
+};
+getPackageManager().installPackage(
+ Uri.fromFile(new File(fileName)), obs, 0,
+ getPackageName());
+Il ne reste qu'a demander le privilège magique dans le fichier AndroidManifest.xml.
+<uses-permission android:name="android.permission.INSTALL_PACKAGES" />
+Rappelez vous que ce dernier n'est accordé que si l'application est installé dans /system/app.
+Nous pouvons alors choisir une des deux approches d'installation suivant les cas, à l'aide d'un simple test.
+if (mContext.checkPermission("android.permission.INSTALL_PACKAGES",
+    android.os.Process.myPid(),
+    android.os.Process.myUid())==PackageManager.PERMISSION_GRANTED)
+{
+ // Version API caché
+ …
+}
+else
+{
+ // Version API classique
+}
+Environnement de test
+Nous devons maintenant créer une instance Android de test, avec le répertoire /system/app en lecture écriture. Pour cela, rien de plus simple.
+Utilisez le « Android SDK and AVD Manager » pour créer une nouvelle machine virtuelle.
+Puis, il va falloir la lancer avec plus de place pour les partitions. Utilisez la commande emulator avec quelques paramètres dont le nom de la nouvelle machine.
+$ emulator -avd MaMachine -partition-size 100
+Ensuite, il s'agit d'ouvrir un shell dans cette machine.
+$ adb -s emulator-5554 shell
+Une fois dans la place, un mount permet d'identifier le périphérique monté pour le répertoire /system.
+# mount
+rootfs / rootfs ro 0 0
+tmpfs /dev tmpfs rw,mode=755 0 0
+devpts /dev/pts devpts rw,mode=600 0 0
+proc /proc proc rw 0 0
+sysfs /sys sysfs rw 0 0
+none /acct cgroup rw,cpuacct 0 0
+tmpfs /mnt/asec tmpfs rw,mode=755,gid=1000 0 0
+none /dev/cpuctl cgroup rw,cpu 0 0
+/dev/block/mtdblock0 /system yaffs2 rw 0 0
+/dev/block/mtdblock1 /data yaffs2 rw,nosuid,nodev 0 0
+/dev/block/mtdblock2 /cache yaffs2 rw,nosuid,nodev 0 0
+/dev/block/vold/179:0 /mnt/sdcard vfat rw,dirsync,nosuid,nodev,noexec,uid=1000,gid=1015,fmask=0702,dmask=0702,allow_utime=0020,codepage=cp437,iocharset=iso8859-1,shortname=mixed,utf8,errors=remount-ro 0 0
+/dev/block/vold/179:0 /mnt/secure/asec vfat rw,dirsync,nosuid,nodev,noexec,uid=1000,gid=1015,fmask=0702,dmask=0702,allow_utime=0020,codepage=cp437,iocharset=iso8859-1,shortname=mixed,utf8,errors=remount-ro 0 0
+tmpfs /mnt/sdcard/.android_secure tmpfs ro,size=0k,mode=000 0 0
+Il suffit de remonter le système de fichier /system en lecture/écriture.
+# mount -o remount,rw -t yaffs2 /dev/block/mtdblock0 /system
+Une fois la porte ouverte, il reste à modifier les privilèges du répertoire /system/app.
+# chmod 777 /system/app
+# exit
+Et voilà. Pour installer l'application dans ce répertoire, rien de plus simple.
+$ adb push InstallApp.apk /system/app
+À partir de maintenant, si vous installez l'application normalement, elle est considérée comme une mise à jour d'une application système, et possède alors les privilèges nécessaires à l'installation silencieuse. C'est sympathique pour faciliter le déverminage. Vous installez une application bidon légère dans /system/app, et c'est parti !
+Conclusion
+Nous avons ainsi les outils nécessaires pour concevoir une nouvelle place de marchés, plus ou moins intégrée suivant la localisation de l'APK. Nous pouvons installer classiquement une application après l'avoir téléchargée depuis la place de marché, ou nous pouvons l'installer silencieusement depuis le site Web si nous pouvons installer notre place de marché dans /system/app.
+La place de marché de Google proposent bien d'autres services, comme la gestion des backups des applications, un mécanisme de PUSH appelé C2DM, la détection et la gestion des mises à jours des composants, la vérification des licences, l'achat en ligne pendant l'exécution d'une application, etc.
+Faire une place de marché de ce niveau est un gros travail, mais qui peut être recyclé pour différents environnements d'exécution. Nous avons effleuré le sujet. Les articles suivants traitent des autres éléments nécessaires à une place de marché digne d'Android.
+Philippe PRADOS article@prados.fr
+Architecte Senior, Smart Mobility. AtoS.

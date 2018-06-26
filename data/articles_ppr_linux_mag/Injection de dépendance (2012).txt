@@ -1,0 +1,208 @@
+﻿Injection de dépendances
+  
+
+L'injection de dépendances est un patron d'architecture utilisé pour résoudre la problématique des dépendances entre objets tout en permettant un découplage des objets liés, en passant par une indirection. C'est une alternative plus souple à d'autres patrons d'architecture tels que ServiceLocator ou Factory.
+Par Raphaël Semeteys et Philippe PRADOS - 2012
+www.prados.fr
+En 2009 des API ont été spécifiées pour standardiser la notion d'injection de dépendances au niveau de Java (JSR-330) et de la plate-forme JavaEE (JSR-299).
+Principes fondamentaux
+La résolution des dépendances entre objets est une problématique ancienne dans le développement informatique, notamment en langage Java. Avant l’émergence du concept d'injection de dépendances, l'instanciation d'un objet B depuis un objet A se faisait :
+- soit explicitement directement depuis l'objet A, en utilisant l'instruction Java new :
+class Stopwatch
+{
+  final TimeSource timeSource;
+
+
+  Stopwatch ()
+  {
+    timeSource = new AtomicClock(...);
+  }
+
+
+  void start() { ... }
+  long stop() { ... }
+}
+- soit en passant par un patron d'architecture de type Factory ou ServiceLocator (via par exemple l'utilisation de JNDI) :
+class Stopwatch
+{
+    final TimeSource timeSource;
+
+
+    Stopwatch ()
+  {
+    timeSource = DefaultTimeSource.getInstance();
+  }
+
+
+  void start() { ... }
+  long stop() { ... }
+}
+
+
+Ces techniques induisent un couplage fort entre les deux objets, ne permettant pas d'isoler les objets situés dans des couches applicatives différentes et rendant difficile les opérations de tests, de réorganisation et plus globalement de maintenance du code source.
+Les patrons d'architecture (design patterns) évoqués offrent plus de souplesse mais requièrent plus de code et ne garantissent pas toujours le respect du typage des objets à la compilation, ce qui induit des erreurs uniquement détectées à l'exécution.
+Le principe de l'injection de dépendances est de se libérer de ce couplage fort entre objets en déléguant à un framework, dit « injecteur », l'instanciation et la liaison des objets à l’exécution. Ainsi les injecteurs affranchissent les développeurs d'utiliser des instructions new ou des patrons de type Factory.
+C'est donc l'injecteur et non plus le développeur qui prend en charge la création des objets, l'appel des méthodes d'initialisation et les différentes liaisons entre ces objets.
+Dans notre exemple précédent, cela donne :
+class Stopwatch
+{
+  final TimeSource _timeSource;
+
+
+  @Inject
+  Stopwatch(TimeSource timeSource)
+  {
+    _timeSource = timeSource;
+  }
+
+
+  void start() { ... }
+  long stop() { ... }
+}
+Où le mot clé @Inject (qui sera explicité plus loin) indique au framework d'injection qu'il doit injecter à la construction un objet de type TimeSource.
+Et l'injecteur se charge de construire l'arbre complet des objets en passant d'une dépendance à une autre. Par exemple, si l'objet Stopwatch est lui-même injecté par un autre :
+/** IHM pour Stopwatch */
+class StopwatchWidget
+{
+  @Inject
+  StopwatchWidget(Stopwatch sw)
+ {
+    …
+  }
+  ...
+}
+l'injecteur réalise les opérations suivantes :
+- trouver une instance de type TimeSource ;
+- construire une instance Stopwatch dépendante de cette instance TimeSource ;
+- construire une instance StopwatchWidget dépendante de l'instance Stopwatch.
+On parle communément d'injection de types lorsque l'on manipule des frameworks d'injection de dépendances. On dira par exemple que le type TimeSource est injecté dans le type Stopwatch qui est lui-même injecté dans le type StopwatchWidget.
+Intérêt de l'injection de dépendances
+L'utilisation d'un injecteur rend donc le code plus sobre car concentré sur la logique métier et non sur celle de la résolution des dépendances, cela facilite la flexibilité, la réorganisation du code et la maintenabilité des applications.
+Cela permet également de se concentrer sur les usages fonctionnels et la conception des applications, par exemple en séparant bien les différentes couches applicatives rendues peu adhérentes grâce à l'injection des dépendances. Cela permet d'éviter l'utilisation de « singletons » ou de variables statiques.
+Cette flexibilité est par exemple très utile pour mettre en œuvre les tests unitaires :
+void testStopwatch()
+{
+  Stopwatch sw = new Stopwatch(new MockTimeSource());
+  ...
+}
+Le développeur doit simplement créer son objet bouchon (ou mock en anglais) simulant une instance TimeSource, cette dépendance sera automatiquement transmise par l'injecteur au code testé.
+C'est l'injecteur qui prend en charge le cycle de vie des objets ce qui induit moins de code à écrire et moins d'oublis de la part des développeurs (et donc moins de bogues). Son rôle est d'assembler des arbres d'objets. Lorsqu'une instance lui est demandée il détermine quels objets créer et comment les lier en fonction des dépendances.
+En outre, l'injecteur respecte le typage des objets ce qui permet de détecter d'éventuelles erreurs sur les types à la compilation et non plus à l’exécution.
+Annotations
+De manière à simplifier l'écriture et la lecture du code, le langage Java a évolué en 2006 avec l'apparition de la JSR-250 formalisant et spécifiant les annotations. Il s'agit de métadonnées apposées au code (classes, champs et attributs) portant des concepts sémantiques utilisés par JavaEE ou JavaSE lors de l’exécution. Par exemple l'annotation @RolesAllowed permet de fixer le rôle nécessaire pour exécuter une méthode.
+L'idée est de ne plus fortement lier le code métier aux frameworks, qui génèrent automatiquement du code technique à partir des annotations. Certains parlent de Programmation Orientée Attributs pour désigner cette technique de découplage.
+Les annotations sont aujourd'hui utilisées par les frameworks modernes d'injection de dépendances pour récupérer les instructions et les informations nécessaires à l'injection. Ces annotations ont été spécifiées par deux JSR :
+- JSR-330 (Dependency Injection for Java) : définition d'une API d'injection extensible et générique ;
+- JSR-299 (Contexts and Dependency Injection for the JavaEE platform ou CDI) : définition d'annotations spécifiques à JavaEE basées sur la JSR-330 pour faciliter et fluidifier le couplage entre les différentes couches applicatives.
+Cette standardisation réalisée au niveau de Java et de JavaEE autour de l'injection de dépendance a été  encouragée et réalisée par les principaux fournisseurs de frameworks d'injection tels que SpringSource et Google pour la JSR-330 ou Red Hat pour la JSR-299.
+JSR-330
+Historique
+La notion d'injection de dépendances a largement été démocratisée dans le mode Java par le framework Spring qui en fait grand usage. À sa création en 2003, Spring a fait le choix d'externaliser la déclaration et le paramétrage des injections dans un fichier XML séparé du code source, de manière à disposer de plus de flexibilité et de réduire l'adhérence entre code métier et informations d'ordre technique.
+En 2008, Google a libéré le code d'un framework interne d'injection de dépendances baptisé Guice. Cet injecteur propose d'utiliser des annotations pour déclarer les injections de types.
+Les deux projets ont finalement décidé de coopérer et de travailler à la standardisation des injections Java de manière à les rendre portables entre différents injecteurs. Ce travail de convergence a donné naissance à la spécification JSR-330, dont la première version  date du 14 octobre 2009.
+L'implémentation de référence de la JSR est Google Guice et un kit de compatibilité est disponible en téléchargement libre. Spring Framework est désormais compatible avec la spécification depuis la version 3.0.
+Contenu
+La JSR-330 spécifie un jeu d'annotations génériques et extensibles pour permettre l'injection de dépendances :
+@Inject : identifie les constructeurs, méthodes et attributs où peuvent avoir lieu des injections ; l'injection commence par le constructeur, puis les attributs et enfin les méthodes ;
+@Qualifier : permet d'ajouter des métadonnées permettant d'aider l'injecteur à sélectionner et à construire les instances à injecter (c'est une annotation d'annotation) ;
+@Qualifier
+public @interface Atomic
+{
+  ...
+}
+
+
+/** A un autre endroit dans le code **/
+public class Car
+{
+  @Inject private @Atomic
+  Watch atomicWatch;
+}
+@Named : Qualifier de type texte qui permet d'identifier un type via un nom symbolique mais ne permet donc plus la vérification du typage à la compilation ;
+@Inject @Named("Atomic")
+Watch atomicWatch;
+@Scope : permet de décrire le contexte d'instanciation d'un groupe d'objets à lier en délimitant un périmètre de réutilisation des instances existantes lors de l'injection ;
+@Singleton : Scope prédéfini indiquant que l'instance est unique, ce qui permet de partager une instance par plusieurs injections ;
+Il est donc possible de définir ses propres Scopes comme par exemple la session ou la requête HTTP.
+En outre, une interface est également définie pour être utilisée de concert avec ces annotations : Provider<T>. Cela permet de maîtriser plus finement la fourniture d'instances lors de l'injection en déclarant un objet capable de fournir le type T puis en récupérant des instances T à chaque appel de la méthode get() sur le Provider.
+class Voiture
+{
+  @Inject Voiture(Provider<Siege> siegeProvider)
+  {
+    Siege conducteur = siegeProvider.get();
+    Siege passager = siegeProvider.get();
+    ...
+  }
+}
+Ceci permet, par exemple, de gérer à la main les cas de dépendances circulaires ou encore de réaliser de l'injection tardive à l'exécution (exemple : type à injecter dépendant de la plate-forme d'exécution Windows ou GNU/Linux).
+La spécification reste simple et très générique, en se bornant à préciser les éléments à ajouter dans le code métier pour réaliser l'injection sans détailler quoi que ce soit au niveau de l'implémentation du mécanisme d'injection par tel ou tel framework. Ainsi elle ne définit pas la méthode de création des instances à injecter et de résolution des dépendances, mais uniquement les annotations permettant de décrire où et quoi injecter. La liberté est laissée à chaque implémentation au niveau de la configuration du framework.
+Liens : http://jcp.org/en/jsr/summary?id=330 et http://code.google.com/p/atinject/
+JSR-299
+Historique
+Cette spécification, dont la première version  date du 10 décembre 2009 (date de publication de la version 6 de JavaEE dont cette JSR fait partie). Les travaux de spécification ont été dirigés par Gavin King de la société Red Hat qui est le concepteur initial des frameworks JBoss Seam et Hibernate.
+Elle standardise un certains nombre de concepts issus du framework JBoss Seam. Initialement nommée « Web Beans », la spécification a été renommée à la publication de sa version finale en « Contexts and Dependency Injection for the JavaEE platform ». La raison de ce changement de nom provient du fait que le périmètre de la spécification a été étendu à l'ensemble des types de composants JEE disponibles et non pas uniquement à la partie présentation.
+L'implémentation de référence de la JSR est le framework Weld et un kit de compatibilité est disponible en libre téléchargement.
+Évolutions de la plate-forme JavaEE
+L'ensemble de spécifications qui définit ce qu'est la plate-forme Java Enterprise Edition continue à évoluer au cours du temps. Un certains nombre de nouveaux concepts ayant émergés dans les dernières versions de JavaEE sont réutilisés par la spécification JSR-299.
+Managed Beans
+JavaEE 6 définit la notion de Managed Beans comme un modèle léger de composants, commun à l'ensemble de la plate-forme JavaEE. Les instances de Managed Beans sont gérées par le conteneur JavaEE qui leur fournit également des services transverses.
+Il s'agit en quelque sorte du type de composant de plus bas niveau, commun et cohérent avec l'ensemble des autres composants apparus au fur et à mesure de l'évolution de la plate-forme JavaEE : EJB, JSF ou composants manipulés par les injecteurs de dépendances.
+Les Managed Beans peuvent ainsi en général être promus dans d'autres types de composants via des annotations et, par exemple, transformés en EJB ou en composants JSF.
+Typage des Managed Beans
+Ces Managed Beans disposent d'un ou plusieurs types qui correspondent généralement aux classes et interfaces implémentées visibles depuis le client. Par exemple un Managed Bean donné dispose de plusieurs types : celui de la classe qu'il contient, de l'interface implémentée par cette classe et de la classe dont elle hérite.
+Intercepteurs (Interceptors)
+D'abord définis au sein de la spécification EJB 3.0 puis isolés dans une spécification annexe d'EJB 3.1, les intercepteurs permettent d'insérer des traitements sur des appels de méthodes ou lors de certains évènements liés au cycle de vie des Managed Beans. Ils ont été conçus pour traiter de problématiques techniques transverses telles que, par exemple, la journalisation, l'audit, la sécurité, les transactions, etc.
+Contenu
+Depuis la version 5, JavaEE intègre la notion d'injection de ressources (telles que des sources de données, des files JMS ou des données d'environnement) via des annotations.
+L'objectif de la JSR-299 est d'ajouter à JavaEE 6 l'injection d'instances. Pour cela, elle réutilise les annotations d'injection de la JSR-330 en étendant le modèle initial et en l'adaptant à la plate-forme JEE. L'injection de dépendances devient donc un service fourni par le conteneur JEE aux Managed Beans.
+Résolution de dépendances
+Par exemple, au niveau de la phase de résolution des dépendances, les annotations @Qualifier et @Named de la JSR-330 sont réutilisées. JSR-299 y ajoute des concepts supplémentaires tels que :
+- le filtrage explicite sur le type de Managed Bean (via l'annotation @Typed) : ce qui permet de forcer le type lors du filtrage via les Qualifiers ;
+- les alternatives (via l'annotation @Alternative) qui imposent de déclarer explicitement une instance dans un fichier externe (/META-INF/beans.xml) pour être disponible via l'injecteur.
+Scopes
+De même JSR-299 précise un certain nombre de Scopes au sens de celui de la JSR-330 :
+- @Dependent : précise l'absence de Scope, le Scope du Managed Bean est hérité du contexte d'injection, donc du Bean dans lequel il est injecté ;
+- Scopes liés aux Servlets : @ApplicationScoped, @RequestScoped et @SessionScoped ;
+- @ConversationScoped : Scope de conversation hérité de JSF qui permet à l'application de conserver un contexte entre plusieurs requêtes correspondant à une fonctionnalité métier ;
+La possibilité de créer de nouveaux Scopes (et de nouvelles annotations associées) est toujours présente.
+Construction des instances à injecter
+A la différence de la JSR-330 qui ne couvre pas cet aspect, la JSR-299 spécifie également le mécanisme de création des instances à injecter. Ainsi l'annotation @Produces doit être utilisée pour marquer les méthodes destinées à créer les objets susceptibles d'être injectés.
+Exemples :
+/** Sélection à l'exécution entre traitement synchrone et asynchrone **/
+@Produces
+public MoteurTraitement getMoteurTraitement(
+  @Synchrone MoteurTraitement sync,
+  @Asynchrone MoteurTraitement async )
+{
+  return estSynchrone() ? sync : async;
+}
+
+
+/** Injection de ressources en conservant le typage **/
+@Stateless
+public class FournisseurDeTaux
+{
+  @Produces @TVA
+  @Resource(name = "java:global/env/jms/TVA")
+  Taux tauxTVA;
+}
+
+
+/** et injection ailleurs dans le code **/
+public class AffichageTaux
+{
+  @Inject @TVA
+  Taux tauxTVA;
+  ...
+}
+Autres éléments contenus dans la spécification
+La spécification contient également d'autres éléments, tels que :
+- intercepteurs typés : la notion d'intercepteurs de JavaEE est reprise en ajoutant un mécanisme d'association des intercepteurs aux Managed Beans qui respecte le typage des objets ;
+- décorateurs : concept similaire aux intercepteurs typés mais orienté métier, les décorateurs interceptent des appels de méthodes pour injecter de la logique métier (ils doivent être explicitement déclarés dans le fichier beans.xml) ;
+- stéréotypes : regroupement d'annotations au sein d'une même définition sémantique utilisable par des frameworks de plus haut niveau ; il s'agit en général de l'association d'un Scope, d'Interceptors, d'un Qualifier, d'une Alternative voir même d'autres Stéréotypes (ceci peut utilisé par exemple pour définir @Model ou @Action du patron d'architecture MVC) ;
+- gestion des événements : les Managed Beans peuvent produire et consommer des événements typés (via des Qualifiers), cela permet de mettre en place un couplage très faible via une notion semblable à celle d'abonnement.
+Lien : http://jcp.org/en/jsr/detail?id=299
+Conclusion
+Nous constatons que la plate-forme Java évolue grandement. Nous découvrons que nous ne la connaissons plus ! Il faudra maintenant concevoir des méta-informations sémantiques sur les objets de l'application, créer des annotations pour les porter, annoter correctement les objets et services, et réaliser un framework permettant d'injecter toutes les couches techniques où il faut, par la création d'arbres d'instances, l'injection de méthodes, bytes-codes, services, etc.
+Raphael Semeteys, Philippe Prados
+Consultants Open Source - AtoS.

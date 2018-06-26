@@ -1,0 +1,301 @@
+﻿Pré-Chargement d'Applet
+  
+
+Sans modifier votre code, ajoutez en dix minutes une barre de progression lors du chargement de votre applet. Ce document explique les différentes étapes de chargement d'une application java et les techniques pour les améliorer.
+Par Philippe PRADOS - 1999
+www.prados.fr
+Ajouter une barre de progression en dix minutes
+Nous allons ajouter une barre de progression lors du chargement d'une applet existante. Ce processus est séparé en deux parties : une phase d'analyse pour identifier les classes nécessaires à l'initialisation de l'applet et une phase d'intégration au cours de laquelle est ajoutée la barre de progression. Il n'est pas nécessaire de modifier l'applet. Elle peut être compilée et éventuellement présente dans une archive.
+Nous allons procéder en dix étapes. Dans la majorité des cas, en moins de dix minutes, vous aurez ajouté la barre de progression à votre applet. Commençons.
+1. Regardez votre montre et notez l'heure actuelle
+2. Copier le fichier makehistory.jar dans un répertoire.
+3. Ajoutez dans le CLASSPATH une référence au fichier makehistory.jar.
+set CLASSPATH=%CLASSPATH%;makehistory.jar
+1. Exécutez l'utilitaire MakeHistory avec comme paramètre l'URL de la page contenant votre applet.
+java MakeHistory http://localhost/MonApplet.html
+1. Attendez l'affichage dans la console du message "Save history in file startup.preload". L'utilitaire a généré le fichier startup.preload avec le nom de toutes les classes nécessaires à l'initialisation de l'applet et un fichier du même nom que la page HTML, suffixé de _preload. Par exemple : MonApplet_preload.html. Cette page est identique à la page initiale, mais le tag APPLET est légèrement modifié.
+2. Quittez votre applet.
+3. Nous allons maintenant déployer le framework. Copiez les fichiers startup.preload, preload.jar et preload.cab dans le répertoire du serveur HTTP correspondant au CODEBASE de votre applet, généralement le répertoire de la page.
+4. Copiez la nouvelle page MonApplet_preload.html dans le même répertoire que l'original.
+5. Lancez votre navigateur et demandez-lui d'afficher la page MonApplet_preload.html.
+6. Regardez votre montre. Dans 98% des cas, vous avez maintenant une barre de progression lors du chargement de votre applet. Il a fallu moins de dix minutes.
+Pour maîtriser plus finement ce framework, lisez les chapitres suivants. Vous y trouverez les explications techniques vous permettant de tirer partie au maximum de cet outil. Vous pourrez également ajouter une barre de progression à une application.
+Si par malchance, vous faites partie des 2% n'ayant pas réussi la première étape, vous trouverez de quoi résoudre le problème. Les situations n'étant pas gérées par ces étapes simplifiées sont les suivantes :
+* Le tag APPLET n'a pas pu être analysé dans le fichier HTML
+* L'applet ne peut pas s'exécuter en dehors d'un navigateur
+* Le message "Save history" arrive avant la fin de l'initialisation.
+Le chargement des applets
+Suivant l'architecture de déploiement, le chargement des applets est plus ou moins efficace. Nous allons étudier les différentes démarches possibles et les moyens pour les améliorer.
+Le chargement d'une applet
+Lors du chargement d'une applet ou d'une application, il y a une étape d'initialisation pendant laquelle l'utilisateur doit patienter. Pour exécuter une classe dans la machine virtuelle, il faut procéder à trois étapes : charger le fichier .class, installer la classe et exécuter le code. Si l'applet n'est pas présente dans une archive, le chargement peut être symbolisé comme ceci.
+  
+
+La flèche du temps s'écoule de la gauche vers la droite. La barre verticale indique la fin de l'initialisation de l'applet. La couleur gris clair représente le temp de chargement du fichier .class ; le petit carré indique le temps de connexion au serveur HTTP ; le gris foncé indique l'installation de la classe ; la couleur blanche indique l'exécution du programme.
+Java utilise une installation paresseuse. Une classe est chargée puis installée lorsque c'est nécessaire. Cela évite d'avoir un grand exécutable en mémoire alors qu'une partie seulement est utilisée. Au fur et à mesure de l'exécution du programme, de plus en plus de classes sont chargées. Le temps consacré à l'exécution réelle augmente. Le démarrage d'une portion gris clair demande un temps plus long car il faut se reconnecter au serveur HTTP.
+Si l'applet est présente dans une archive, les chargements des fichiers .class sont regroupés avant l'installation de la première classe.
+  
+
+L'installation des classes continue à être répartie tout au long de l'exécution du programme. On économise avec cette architecture les temps de reconnexion au serveur HTTP et l'on réduit le temps de chargement des fichiers .class car ceux-ci sont compressés, mais on doit attendre le chargement de toute l'archive avant de pouvoir utiliser l'applet.
+Les classes n'ont pas toutes le même statut. Certaines devront être chargées, d'autre non. Les classes indispensables à l'initialisation de l'applet seront, quoi qu'il arrive, installées dans la machine virtuelle. D'autres classes ont le même statut car l'utilisateur devra passer par certains chemins de l'application. Par contre, les classes s'occupant de l'impression ne sont nécessaires que si l'utilisateur le demande. De même, les classes des exceptions ne sont nécessaires que si l'une d'entre elles se produit.
+La règle des 20/80 peut s'appliquer au chargement des applets importantes : 20% des classes sont obligatoires, 80% des classes peuvent être chargée à la demande. Vous pouvez améliorer le déploiement de votre applet en ne plaçant dans l'archive que les classes strictement nécessaires et les classes devant être signées. Les autres restent dans des fichiers .class séparés. Les fichiers .class supplémentaires seront compressés à la volé par les modems lors du chargement.
+  
+
+Les applets java sont généralement chargés sur le poste client à la demande. Le navigateur peut garder en cache l'archive ayant permis de lancer l'applet, mais, dans certaines conditions, il peut la supprimer. Si l'archive est trop importante pour le cache (>64k), et devrait forcer à supprimer trop de fichiers déjà présents dans le cache, elle n'est pas mémorisée. Cela peut entraîner un rechargement de l'archive à chaque consultation de la page. Dans ce cas, il peut être préférable d'installer l'archive sur le poste client. Netscape et Microsoft proposent des solutions pour cela. Le JDK 1.3 également. Lorsque l'applet est installée sur le poste client, le temps d'ouverture de l'archive est négligeable.
+  
+
+Améliorer le chargement
+Pour améliorer l'expérience de l'utilisateur, il faut regrouper le temps d'installation des classes en affichant une barre de progression.
+Si on n'utilise pas d'archive, cela donne :
+  
+
+La section encadrée de pointillé représente l'additif à l'applet pour permettre le pré-chargement des classes.
+Une partie importante du chargement est passive. Il faut attendre les paquets du réseau. Pour utiliser les temps morts lors du chargement d'un fichier .class, il faut lancer une tâche s'occupant de charger les autres classes.
+  
+
+On bénéficie ainsi de deux connexions au serveur HTTP simultanément. Les navigateurs utilisent généralement quatre connexions avec le serveur pour charger une page HTML et ses images. Le ClassLoader de java ne peut pas procéder ainsi car la résolution des classes doit être synchrone. Utiliser une autre tâche pour le chargement des classes permet d'améliorer sensiblement le chargement de l'applet.
+Lorsque l'applet s'affiche, toutes les conditions sont réunies pour une exécution rapide. Un programme de démarrage va se charger d'afficher la barre de progression, de charger et d'installer les classes nécessaires à l'application. Il doit être très petit et ne nécessiter que peu de classes (<15ko). Cela permet, lors d'une connexion avec un modem, d'avoir rapidement l'affichage de la barre de progression.
+Avec l'applet dans une archive, nous avons :
+  
+
+Les fichiers .class sont compressés. L'utilisateur attend le chargement de toutes les archives avant de voir la barre de progression. Celle-ci s'exécute rapidement. L'expérience de l'utilisateur est améliorée, mais ce n'est pas la situation idéale.
+Si l'archive ne possède que les classes strictement indispensables au démarrage de l'applet, le schéma devient :
+  
+
+Le temps de chargement de l'archive est réduit. L'utilisateur obtient un chargement efficace.
+Si l'application est installée sur le poste utilisateur, le temps de chargement est négligeable. Le schéma devient :
+  
+
+La barre de progression avance rapidement. Cela est cohérent avec l'initialisation de l'applet.
+Anticiper l'utilisation
+Une fois l'application démarrée, on peut lancer une tâche s'occupant de charger les classes supplémentaires qui seront nécessaires par la suite.
+  
+
+Cela permet de bénéficier des temps morts de l'utilisateur pour continuer l'installation de l'applet. Cette approche est possible car la machine virtuelle décharge les classes lorsque le ClassLoader correspondant est déchargée.
+Les classes ont trois statuts différents : indispensable, préférable et optionnel.
+* Les classes indispensables seront présentes dans l'archive de l'applet ;
+* les classes préférables seront chargées en tâche de fond après l'initialisation de l'applet
+* les classes optionnelles seront chargées à la demande par le navigateur.
+Architecture globale
+Nous sommes partis d'un chargement morcelé et long pour aboutir à un chargement structuré et optimisé. Plusieurs architectures peuvent bénéficier de toutes ces technologies.
+Dans le cas d'un chargement des .class non présent dans une archive, nous améliorons le chargement comme ceci :
+  
+
+Le schéma du dessus représente le chargement classique de l'applet. Le schéma du dessous représente la version optimisée.
+Si toute l'applet est dans une archive, on peut utiliser cette architecture, mais l'expérience de l'utilisateur n'est pas complètement satisfaisante. Tout dépend de la proportion de classes strictement nécessaire par rapport au nombre de classe totale.
+Si l'archive possède essentiellement des classes indispensables au démarrage de l'applet, on peut utiliser la barre de progression lors du chargement. Par exemple, si l'applet utilise plus de 80% des classes de l'archive pour s'initialiser.
+  
+
+Sinon, l'archive ne doit posséder que les classes nécessaires à l'initialisation.
+  
+
+L'archive est de taille réduite et le chargement des classes supplémentaires s'effectue en tâche de fond.
+Dans le cas d'une applet installé sur le poste de l'utilisateur, le chargement est amélioré comme ceci :
+  
+
+La barre de progression avance rapidement et une tâche de fond s'occupe d'installer les classes supplémentaires.
+Le framework
+Pour implémenter les architectures décrites précédemment, nous allons utiliser différentes classes et un utilitaire.
+Création de la liste des classes
+Il est nécessaire de décrire l'ensemble des classes à charger avant de lancer l'application. Les classes doivent être présentes dans l'ordre d'exécution naturelle. En effet, il est possible qu'il y ait des effets de bords lors de l'exécution des blocs statiques.
+Obtenir la liste des classes à charger pour le lancement d'une applet n'est pas facile. L'obtenir dans l'ordre est encore plus difficile. Un utilitaire va nous aider. Pour pouvoir l'utiliser, il faut ajouter dans le CLASSPATH l'archive makehistory.jar.
+La classe MakeHistory peut lancer une application ou une applet. Lorsqu'elle constate qu'il n'y a plus eu de classe chargée pendant dix secondes, elle en déduit que l'initialisation est terminée. Un fichier startup.preload est alors sauvé sur le disque. Il décrit les différentes classes pour démarrer l'application. Ce fichier servira à l'applet PreloadApplet pour charger dans l'ordre les classes de l'application.
+L'utilitaire MakeHistory accepte plusieurs paramètres. Il est possible d'indiquer une temporisation différente et un autre nom pour le fichier de sauvegarde. D'autres paramètres permettent d'indiquer s'il s'agit d'une application ou d'une applet, ainsi que les différentes informations nécessaires à l'exécution.
+Il y a trois syntaxes d'appel possibles :
+java MakeHistory opt <AppClassName> [<params>*]
+java MakeHistory opt <file|URL>
+java MakeHistory opt -a [width=<int>] [height=<int>]
+                               [codebase=<url>] [docbase=<url>]
+                               [<param>=<value>*] <AppletClassName>
+Les paramètres entre crochet sont optionnels. La barre verticale indique une alternative. opt indique les options disponibles pour les trois syntaxes. Cela correspond à :
+[-h <file>] [-timeout <int>] [-e] [-r <file|->]
+Le paramètre -h permet d'indiquer un nom de fichier pour sauver l'historique des classes (par défaut : startup.preload). Ce fichier décrit les différentes classes à charger. La première ligne indique le nombre de classes. Les lignes suivantes indiquent leurs noms. Par exemple, le fichier startup.preload peut être ainsi :
+2
+com.wc.MonApplet
+com.wc.MaClass
+Pour sauver automatiquement l'historique des classes, le programme utilise la règle suivante : s'il n'y a plus de classes d'installées pendant dix secondes, il considère que le programme a terminé son initialisation. Le paramètre -timeout permet d'indiquer un nombre de secondes pendant lequel aucune classe ne doit être chargée pour que l'utilitaire sauve automatiquement l'historique (par défaut : dix secondes). Une trace sur le flux System.err est affichée à cette occasion.
+Le paramètre -e permet de quitter automatiquement l'applet ou l'application après la sauvegarde de l'historique. Cela permet de rafraîchir automatiquement le fichier startup.preload et de quitter l'applet.
+Le paramètre -r permet de sauver dans un fichier toutes les ressources nécessaires à l'initialisation de l'applet. La valeur - pour le nom du fichier permet d'utiliser le nom par défaut : resources.txt. Cela comprend les fichiers .class et les ressources demandées par les méthodes getResource() ou getResourceAsStream(). Cela facilite la construction d'une archive minimale pour initialiser l'applet. Un script peut facilement utiliser ce fichier pour générer une archive de taille réduite.
+<AppClassName> est le nom de la classe de démarrage. La méthode main()y est recherchée et exécutée. Les autres paramètres de la ligne de commande sont transmis à l'application.
+<file|url> est le nom d'un fichier local ou une URL d'une page HTML où se trouve l'applet à analyser. A cette occasion, une page de même nom, suffixé de _preload, sera créé pour indiquer les modifications à apporter pour ajouter la barre de progression. Si la page référencée utilise déjà l'applet PreloadApplet, l'utilitaire le prend en compte et ne génère pas de fichier _preload. Il se contente de rafraîchir le fichier startup.preload. Lorsque le fichier _preload fonctionne correctement, vous pouvez remplacer l'ancienne version par la nouvelle.
+Attention, si vous indiquez une URL avec le protocole http:, l'analyse s'effectue sur la page vue du client. Les scripts serveurs éventuels ne seront pas présents dans le fichier _preload. Dans ce cas, il y a plusieurs solutions :
+* Utilisez une URL avec le protocole file:
+* Ajoutez le nécessaire au CLASSPATH pour trouver l'applet et utilisez la syntaxe acceptant un nom de fichier.
+* Modifiez vous-même à la main le tag <APPLET> en suivant le modèle décrit plus loin.
+En l'absence de page HTML pour lancer une applet ou si l'analyse du fichier ne peut aboutir, il faut indiquer le paramètre -a suivi éventuellement des informations de taille, de codebase et les différents paramètres. Une instance AppletClassName est créée et exécutée comme elle le serait avec l'AppletViewer.
+Par exemple, pour analyser l'application MonAppli acceptant un nom de fichier en paramètre, il faut utiliser :
+java MakeHistory com.wc.MonAppli monfichier.txt
+Pour analyser la première applet présente dans une page HTML :
+java MakeHistory http://localhost/MonApplet.html
+Le fichier est exécuté dans les mêmes conditions que dans un navigateur (les classes sont chargées à partir du serveur HTTP). Le premier tag <APPLET> est analysé pour valoriser tous les paramètres nécessaires. Le fichier MonApplet_preload.html possède le tag <APPLET> modifié.
+Pour analyser une applet présente dans un fichier :
+java MakeHistory c:\dir\MonApplet.html
+Les extensions htm, html, alx, asp, jsp, stm, sct, htx et shtml identifient les fichiers au format HTML. Le fichier MonApplet_preload.html possède la version modifiée.
+Pour analyser une applet sans utiliser de fichier HTML :
+java -a com.wc.MonApplet
+Ces modes d'exécutions permettent de répondre aux différentes situations.
+API
+Il existe quelques API que vous pouvez appeler pour manipuler l'utilitaire.
+Si l'applet ne peut fonctionner qu'au sein d'un navigateur, il n'est pas possible de la démarrer. MakeHistory est équivalent à l'AppletViewer, mais ne simule pas un navigateur. Vous pouvez éventuellement adapter le comportement de votre applet en vérifiant si l'exécution s'effectue au sein de l'utilitaire MakeHistory. Pour cela, il faut appeler la méthode MakeHistory.isStart().
+Vous pouvez effacer ou sauver l'historique à un moment précis de l'exécution. La méthode MakeHistory.clearHistory() permet de vider la liste des classes déjà chargées ; MakeHistory.saveHistory() permet de sauver l'historique courant.
+Par exemple, avec Swing™, vous pouvez enregistrer des combinaisons de touche de raccourci pour effacer et sauver l'historique des classes. Le code suivant permet d'effacer l'historique sur la combinaison Ctrl+Alt+C et de le sauver dans le fichier post.preload sur la combinaison Ctrl+Alt+S.
+try
+{
+
+
+  // If MakeHistory not found, throw exception and ignore keyboard
+  if (MakeHistory.isStart())
+  {
+      getRootPane().registerKeyboardAction(
+      new AbstractAction("clear history")
+      {
+        public void actionPerformed(ActionEvent e)
+        {
+          MakeHistory.clearHistory();
+          System.out.println("*** Clear history");
+        }
+      }, "Clear history",
+
+
+      KeyStroke.getKeyStroke('C', Event.CTRL_MASK + Event.ALT_MASK),
+                             JComponent.WHEN_IN_FOCUSED_WINDOW);
+      getRootPane().registerKeyboardAction(
+      new AbstractAction("clear history")
+      {
+        public void actionPerformed(ActionEvent e)
+        {
+          try
+          {
+            MakeHistory.saveHistory("post.preload");
+            System.out.println("*** Save history");
+          } 
+          catch (java.io.IOException x)
+          {
+            System.out.println("*** Error when save history (" +
+                               x + ')');
+          }
+        }
+      }, "Save history",
+      KeyStroke.getKeyStroke('S', Event.CTRL_MASK + Event.ALT_MASK),
+                             JComponent.WHEN_IN_FOCUSED_WINDOW);
+    }
+  } 
+  catch (NoClassDefFoundError x)
+  {
+    // Ignore
+  }
+Si la classe MakeHistory n'est pas présente dans le CLASSPATH ou si l'applet n'a pas été lancée par cette utilitaire, l'enregistrement des touches n'est pas effectué. Ainsi, le programme peut conserver ce code, sans impact pour l'application. Les touches sont disponibles, si et seulement si, l'applet est lancé par l'utilitaire MakeHistory.
+Ces raccourcis claviers vont permettre de produire des fichiers historiques sur mesure. Cela permet d'identifier les classes supplémentaires qui devront être chargé après l'initialisation de l'applet ou de l'application.
+Pour identifier les classes devant être chargées après l'initialisation de l'applet, lancez celle-ci avec l'utilitaire MakeHistory, appuyez sur Ctrl-Alt-C pour effacer l'historique, parcourez l'application dans son ensemble, et appuyez sur Ctrl-Alt-S pour sauver l'historique. Le fichier post.preload servira au chargement des classes supplémentaires, en anticipant l'utilisateur.
+Les méthodes MakeHistory.clearResources() et MakeHistory.saveResources() permettent de manipuler la liste des ressources. Cela permet de construire une archive de taille réduite ne contenant que les ressources nécessaires à l'initialisation de l'applet.
+Chargement d'une applet
+L'applet PreloadApplet s'occuper de présenter une barre de progression lors du chargement d'une applet. Elle encapsule une applet classique. L'applet incluse ignore la présence de PreloadApplet. Pour un tag comme celui-ci :
+<applet code="com.wc.MonApplet.class">
+</applet>
+Il faut le modifier comme ceci :
+<applet code="fr.ibm.ebusiness.preload.PreloadApplet.class"
+  archive="preload.jar"
+>
+<param name="cabbase" value="preload.cab">
+<param name="applet"  value="com.wc.MonApplet">
+<param name="preload" value="startup.preload">
+</applet>
+Le paramètre code indique maintenant PreloadApplet. Les archives preload.jar et preload.cab sont ajoutées. Deux nouveaux paramètres sont introduits : applet indique le nom de la classe interne à utiliser ; preload indique le nom de la ressource pour connaître la liste des classes à charger. La valeur startup.preload est prise par défaut. La ressource est recherchée par rapport à la racine CODEBASE. Si la ressource preload n'est pas présente, le chargement de l'applet interne s'effectue classiquement. Vous pouvez ainsi facilement déverminer votre programme en supprimant ce fichier tant que l'application n'est pas stabilisée.
+Les archives preload.jar et preload.cab possèdent le package preload. Vous pouvez y ajouter le fichier startup.preload. Cela permet d'optimiser le chargement car ce fichier peut être efficacement compressé (de l'ordre de 80%). Si vous installez l'applet sur le poste client, il faut également installer les classes présentes dans cette archive.
+Attention, bizarrement, Netscape impose le privilège UniversalFileAccess pour pouvoir appeler la méthode getResourceAsStream(). Pour ajouter le fichier startup.preload dans l'archive preload.jar, il faut la signer.
+mkdir tmp
+cd tmp
+jar xf ..\preload.jar
+cd ..
+copy startup.preload tmp
+signtool -k key -Z preload.jar -d "userdir" tmp
+rmdir /S tmp
+Où key est le nom de la clef et userdir est le nom du répertoire utilisateur de Netscape.
+La fenêtre de chargement des classes peut ne pas convenir. Par exemple, vous pouvez afficher une fenêtre de copyright pendant le chargement des classes. Pour faire cela, il faut ajouter le paramètre SplashClass à l'applet. Celui-ci doit contenir le nom d'une classe héritant de java.awt.Component. Si le composant implante l'interface LoadHistoryListener, il reçoit les événements permettant de rafraîchir une barre de progression.
+Pour contrôler la taille du composant, vous pouvez utiliser les paramètres SplashWidth et SplashHeight.Ils peuvent prendre un nombre de pixels ou une taille relative à la taille de l'applet exprimé en pourcentage.
+<applet code="fr.ibm.ebusiness.preload.PreloadApplet.class"
+  archive="preload.jar"
+>
+<param name="applet"       value="com.wc.MonApplet">
+<param name="SplashClass"  value="com.wc.CopyrightSplash">
+<param name="SplashWidth"  value="80%">
+<param name="SplashHeight" value="200">
+</applet>
+Chargement d'une application
+La classe PreloadApplication permet d'afficher une barre de progression lors du chargement d'une application Java. Après avoir généré le fichier startup.preload, vous pouvez lancer votre application comme ceci :
+java PreloadApplication com.wc.MonApplication
+La ressource startup.preload est utilisée par défaut et doit être présente par un répertoire du CLASSPATH ou dans l'archive de l'application.
+Si vous désirez intégrer le chargement des classes dans votre méthode main(), vous devez ajouter un code similaire à celui-ci :
+package com.wc;
+class MonApplication
+{
+  public static void main(String args[])
+  {
+    InputStream in=MonApplication.class.getResourceAsStream("/startup.preload");
+    if (in!=null)
+      PreloadApplication.preload(in);
+    ...
+  }
+}
+Vous pouvez également indiquer une largeur minimum pour la fenêtre de chargement.
+PreloadApplication.preload(in,100);
+La méthode preload() affichant une fenêtre, la tâche AWT de gestion des messages est lancée. Si votre application n'utilise pas de fenêtre, vous devez terminer la méthode main() par System.exit(0).
+Continuer le chargement
+A la fin de la méthode init() d'une applet ou après l'initialisation d'une application, vous pouvez lancer en tâche de fond le chargement des classes supplémentaires. Pour cela, vous devez générer le fichier post.preload à l'aide des touches de raccourci. Pour ne pas perturber l'utilisateur, le chargement des classes s'effectue dans une tâche de priorité réduite.
+Attention, il ne faut pas charger les classes décrites par le fichier post.preload lorsque l'applet est utilisé avec l'utilitaire MakeHistory.
+boolean isHistory=false;
+try
+{
+  isHistory=MakeHistory.isStart();
+}
+catch (NoDefClassFoundError x)
+{
+  // Ignore
+}
+if (!isHistory)
+{
+  InputStream in=getClass().getResourceAsStream("/post.preload");
+  if (in!=null)
+  {
+    Thread th=LoadHistory.launchLoadHistory(
+      new InputStreamReader(in));
+    th.setPriority(Thread.MIN_PRIORITY+
+       (Thread.NORM_PRIORITY-Thread.MIN_PRIORITY)/2
+      );
+  }
+}
+Ainsi, le chargement de l'application s'effectue en plusieurs étapes. Une barre de progression arrive rapidement et une tâche de fond s'occupe des classes supplémentaires pendant que l'utilisateur l'utilise. Cette deuxième étape est la plus pertinente pour améliorer l'exécution. En effet, une fois l'applet lancée, celle-ci attend des réactions de l'utilisateur. Pour ne pas perdre de temps, la tâche de fond bénéficie des temps morts pour les anticiper.
+Performances
+Nous avons effectué des tests de performances sur une application importante. Celle-ci a besoin de plus de 4 Mo de fichiers .class, d'images et de fichiers .properties. Trente pourcents de ces ressources sont nécessaires pour le lancement de l'applet. Les soixante-dix pourcents restants sont utiles lors de l'utilisation de l'application.
+Différentes configurations ont été mesurées :
+* Pas d'archive, utilisation des fichiers .class
+* Toute l'application dans une archive
+* Uniquement les ressources nécessaires au lancement de l'applet sont présentes dans une archive
+* L'application est installée sur le poste client
+Deux mesures ont été prises :
+* le temps avant l'affichage de la barre de progression
+* le temps nécessaire à l'initialisation de l'applet
+Des mesures ont été faites avec et sans la barre de progression mais les résultats ne faisaient pas apparaître de perte significative. Au contraire. Dans la situation où toutes les classes sont dans des fichiers .class, le temps de chargement est réduit de 10%. Cela est dû à l'utilisation simultanée de deux requêtes au serveur HTTP. Ajouter la barre de progression n'a pas d'impacte négatif sur le temps de chargement.
+Dans ce contexte, le chargement de l'archive possédant toute l'application prend le temps maximum. Cette configuration sert de référence aux autres tests. Toute minoration de ce temps est exprimée en pourcentage par rapport au maximum. Le temps nécessaire à l'affichage de la barre de progression est exprimé en pourcentage par rapport au temps total pour la configuration.
+Configuration
+	Tps conf. /
+Tps max
+	Tps barre prog./
+Tps conf.
+	Tous dans une archive
+	100%
+	76%
+	Pas d'archive
+	64%
+	1%
+	Le minimum dans une archive
+	45%
+	51%
+	Installation de l'archive
+	30%
+	1%
+	Les tests ont été effectués entièrement en local pour éviter les aléas de qualité du réseau entre les tests. Le client et le serveur étaient sur le même poste. Cela explique le faible écart entre la version installée et les autres.
+La barre de progression apparaît immédiatement dans les configurations "Pas d'archive" et "Installation de l'archive". Cela était prévisible car il n'est pas nécessaire de charger d'archive avant de lancer l'application. Le framework a été conçu pour réduire au maximum le temps nécessaire pour l'affichage de la barre de progression.
+Si toute l'application est dans une archive, il faut attendre son chargement total avant de la lancer. Il faut 76% du temps total pour charger l'archive et 24% pour l'initialisation.
+Si l'application est partiellement dans une archive, le temps est réduit de plus de la moitié. La barre de progression arrive plus rapidement (23% par rapport au temps maximum contre 76%). Les classes supplémentaires seront chargées en tâche de fond ou lorsque la VM le demande.
+Ces tests ne sont pas représentatifs de toutes les applications Java. Tout dépend de la proportion de classes nécessaires à l'initialisation par rapport au nombre total de classes, du gain obtenu lors de la compression, de la configuration réseau, etc.
+Un test en vraie grandeur peut améliorer l'expérience de l'utilisateur. Il obtiendra une barre de progression lors du chargement rapide de son applet.

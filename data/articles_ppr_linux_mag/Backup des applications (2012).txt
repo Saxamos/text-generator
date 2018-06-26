@@ -1,0 +1,175 @@
+﻿Backup de l'application
+  
+
+Google propose une technologie permettant d'effectuer des sauvegardes de l'application. Cela est trop souvent ignoré des développeurs, alors que peut d'efforts sont nécessaires.
+Par Philippe PRADOS - 2012
+www.prados.fr
+Les utilisateurs ajoutent et supprimes des applications régulièrement. Ils acquièrent de nouveaux devices comme des tablettes, de nouveaux téléphones ou des périphériques plus exotiques comme des téléviseurs connectés, des auto-radios, des montres ou des lunettes tournant sous Android.
+Des applications peuvent être supprimé temporairement du téléphone, pour libérer de l'espace le temps de finir un jeu, ou pour effectuer une mise à jour du téléphone.
+Un téléphone peut être perdu, remplacé suite à retour en SAV, ou remis à zéro suite à une mauvaise manipulation.
+Dans tous ces scénarios, l'utilisateur doit réinstaller les applications. Google mémorise la liste des applications achetés ou téléchargés, et propose alors de les installer automatiquement. Quel plaisir de retrouver tous son environnement après avoir saisir son identifiant Google, lors de l'achat d'une tablette !
+Oui mais voilà, les applications sont présentes, mais pas les données. Pourtant, les applications peuvent facilement sauvegarder toutes leurs données dans le Cloud de Google.
+Le service de backup d'Android sauvegarde régulièrement les données privées des applications sur le Cloud. Comme pour l'intégralité des composants Android, différents fournisseurs de sauvegarde peuvent être proposé. Celui proposé avec le package Google d'Android (avec Gmail, Le Market, etc.), s'occuper de sauvegarder les données dans le Cloud de Google. Des constructeurs peuvent proposer d'autres implémentation pour sauvegarder les données chez eux.
+Durant le processus de backup, le Backup Manager interroge votre application pour connaître les données à sauvegarder. Puis il sauve ces données sur le cloud. Durant le processus de restore, il récupère les données et les donne à l'application. L'application peut demander une restitution des données, mais ce n'est pas nécessaire, car Android récupère automatiquement les données lors de la ré-installation de l'application.
+Ainsi, si une application est installé sur un téléphone Android, il est possible de récupérer tous les paramètres lors de l'installation de la même application sur une tablette. Il suffit d'utiliser le même compte Google. Et comme la liste des applications est également mémorisé par Google, lors de l'achat d'une tablette, toutes les applications sont récupérées, ainsi que tous les paramètres !
+La sauvegarde étant un processus sensible, les applications ne peuvent accéder aux données sauvegardées des autres applications. Seul le composant de backup à accès aux données (et google sur le cloud).
+Google indique que la couche transport du backup diffère suivant les terminaux, Android ne garantie pas que la sécurité des données lors du backup. Il faut prendre les précautions nécessaires pour la sauvegarde des couple utilisateur/mot de passe.
+Si vous souhaitez garder la confidentialité des données présentes dans le nuage, il va falloir chiffrer les données. Le problème est alors de connaître la clef de chiffrement pour récupérer les données. Soit la clef est également sauvegardé sur le cloud, Google peut alors théoriquement déchiffrer les données, soit la clef est dérivée de l'identité du terminal, mais dans ce cas, les données ne peuvent être récupéré lors de l'installation sur un autre device, soit la clef est mémorisées ailleurs sur le net.
+Le plus simple est de faire confiance à Google, qui de toute façons est capable d'installer n'importe quelle application sur le terminal à votre insu, avec tous les privilèges si nécessaire.
+
+
+Enregistrement
+Avant toute chose, il est nécessaire d'obtenir l'autorisation de sauvegarder l'application au près du nuage de Google. Cela s'effectue ici : http://code.google.com/intl/fr-FR/android/backup/index.html. Il s'agit d'obtenir un ticket associé à l'application et de la déclarer dans le fichier AndroidManifest.xml à l'aide d'une méta-donnée.
+<meta-data android:name="com.google.android.backup.api_key"
+  android:value="la_clef_du_service_de_backup" />
+Cela limite dans les faits, la sauvegarde sur d'autres plate-formes, car il faudrait que l'application s'enregistre sur chacune.
+Déclaration
+Pour proposer la sauvegarde des données, il faut que l'application propose un agent de backup et le déclarer dans le AndroidManifest.xml dans l'attribut android:backupAgent du marqueur <application/>.
+Attention de bien également valoriser l'attribut android:allowBackup à true, la valeur par défaut.
+Ce dernier est une classe qui dérive de BackupAgent. Elle impose la création de plusieurs méthodes pour la sauvegarde des paramètres de l'application sur le cloud. La méthode onBackup() est invoqué lorsque le BackupAgent estime qu'il est judicieux d'effectuer le backup (car le terminal n'est pas trop sollicité). La méthode onRestore() est invoqué juste après l'installation de l'application. Attention, la méthode Application.onCreate() est invoqué avant.
+onBackup
+La méthode onBackup() doit sélectionner les informations à sauvegarder (les paramètres de l'applications, les comptes utilisateurs, les fichiers). Seul le BackupManager est habilité à invoquer cette méthode. Il est préférable de ne pas sauvegarder les différents caches présent sur disque. En effet, un cache est toujours récupérable par d'autres moyens, et cela économise la bande passante lors de la sauvegarde.
+Lorsqu'une donnée à sauvegarder à été modifier, il est nécessaire d'invoquer la méthode dataChanged() du BackupManager. Cela signale qu'il est nécessaire d'effectuer une sauvegarde. Cette dernière n'est pas effectué immédiatement. Elle le sera plus tard, lorsque l'agent le jugera nécessaire. La méthode onBackup() n'est pas invoqué pour le moment.
+Trois paramètres sont proposé à la méthode onBackup() : oldState, l'état de la dernière sauvegarde; data, un objet pour alimenter la sauvegarde et newState un descripteur de fichier pour sauver les données.
+Avec ces informations, le code doit vérifier si les données ont évoluées depuis la dernière sauvegarde, en comparant les données présentes dans oldState avec les données présentes.
+Imaginons une application avec un paramètre « utilise SSL » valorisé à « true ». L'utilisateur peut modifier la valeur à false. Il invoque alors dataChanged(). Si la sauvegarde intervient alors, la nouvelle valeur est mémorisées. Si l'utilisateur modifie à nouveau la donnée à true, et que la sauvegarde n'est pas intervenu entre-temps, les anciennes données sauvegardées sont identiques aux données actuelles. Il n'est pas nécessaire d'effectuer de sauvegarde.
+Vous pouvez obtenir un descripteur de fichier de la sauvegarde précédente avec oldState.getFileDescriptor(). A vous de structurer le fichier pour faciliter la comparaison. Généralement, les programmes utilise un flux binaire normalisé big-endian, via la classe DataInputStream. Cela permet d'avoir un fichier ré-utilisable sur différentes plate-formes.
+FileInputStream instream = new FileInputStream(oldState.getFileDescriptor());
+DataInputStream in = new DataInputStream(instream);
+Si les données ont partiellement évolué, il faut utiliser le paramètre data pour sauver les différences. Ce paramètre est du type BackupDataOutput. C'est une classe permettant de sauver des tableaux de bytes, associés à des clefs. Il faut d'abord sauvegarder un en-tête décrivant la donnée et sa taille, puis les données.
+Généralement, les données sont alors agrégés en mémoire avant d'être livré à l'instance data.
+ByteArrayOutputStream bufStream = new ByteArrayOutputStream();
+DataOutputStream outWriter = new DataOutputStream(bufStream);
+// Ecriture des données structurées
+outWriter.writeUTF(mPlayerName);
+outWriter.writeInt(mPlayerScore);
+// Récupération du buffer
+byte[] buffer = bufStream.toByteArray();
+Ensuite, il faut livrer le buffer à l'instance data.
+data.writeEntityHeader(TOPSCORE_BACKUP_KEY, buffer.len);
+data.writeEntityData(buffer, buffer.len);
+Plusieurs données peuvent être écrites à la suite comme cela. Les clefs que vous utiliserez vous permettrons, lors de la restitution des données, de savoir quelles sont données à modifier. Ce mécanisme permet une mise à jour partielle des données sauvegardées.
+Si aucune donnée n'était présente dans une sauvegarde précédente,  ou qu'elles doivent toutes être modifiée, il est préférable d'effectuer une sauvegarde complète via le paramètre newState. Il s'agit d'un descripteur de fichier.
+FileOutputStream outstream = new FileOutputStream(newState.getFileDescriptor());
+Attention, il est important de synchroniser la lecture et l'écriture du fichier, car rien n'interdit au service de backup de lire les données au même moment qu'elles sont écrites.
+onRestore
+Lorsqu'il est temps de restaurer les données, le BackupManager invoque votre méthode onRestore(). Trois paramètres sont proposés : data pour lire les données ; appVersionCode avec le numéro de version de l'application archivée (cela permet une monté de version) et newState, un objet permettant de mémoriser l'état de l'archive. C'est cet objet qui sera livré dans le paramètre oldState de la méthode onBackup(). Il peut être limité à la date de la dernière sauvegarde si vous le souhaitez.
+Le code doit itéré sur l'objet data, avec la méthode readNextHeader(). Il est alors possible de demander la clef courante et les données associées.
+while (data.readNextHeader())
+{
+  String key = data.getKey();
+  int dataSize = data.getDataSize();
+  byte[] dataBuf = new byte[dataSize];
+  data.readEntityData(dataBuf, 0, dataSize);
+  …
+}
+Ensuite, il faut écrire l'état du restore dans le fichier newState. Cela peut reprendre l'intégralité des paramètres, ou simplement une synthèse. Il ne faut pas oublié que ce fichier est gardé dans le terminal.
+Par exemple, si une application garde l'image d'un avatar, il est préférable de mémoriser dans newState un hash de l'image. Cela est suffisant pour savoir, lors du onBackup() si l'image a été modifié. La consommation disque sur le terminal en est réduit. Les utilisateurs vous disent merci.
+Le paramètre appVersionCode doit être utilisé s'il existe une évolution dans le format des sauvegardes entre plusieurs versions. Si le BackupManager s’aperçoit que l'utilisateur installe une version plus ancienne, il interrompt le processus de restauration, car il considère qu'il n'est pas possible pour une version ancienne, de récupérer les données d'une version nouvelle. L'application est donc installées, vierge de données.
+Il est possible de surcharger ce mécanisme. Pour cela, il faut valoriser l'attribut android:restoreAnyVersion du marquer <application/> à true. A vous de bien comprendre les implications de ce paramètre. Cela indique que les différentes versions de votre application sont capable de gérer les paramètres de toutes les versions présente et future.
+Par exemple, une application peut utiliser des clefs pour différents paramètres. Les versions futures peuvent ajouter de nouvelles clefs, mais ne peuvent en supprimer. Une ancienne version peut récupérer les valeurs des clefs qu'elle connaît et ignorer les clefs qu'elle ne connaît pas. Si une clef lui est indispensable, et qu'elle n'est pas présente, elle peut alors décider de ne pas procéder au restore. Cela correspond à la valeur false du paramètre restoreAnyVersion. C'est à l'application de décider.
+L'application n'a généralement pas besoin de demander une restauration des données. Si elle le souhaite, elle peut invoquer la méthode BackupManager.requestRestore().
+BackupAgentHelper
+Tous cela semble bien compliqué. La plupart des applications n'ont à sauvegarder que des fichiers et des propriétés. Android propose une implémentation simplifié d'un agent de sauvegarde, permettant de gérer facilement ces situations.
+En héritant de BackupAgentHelper à la place BackupAgent, il n'est plus nécessaire de rédiger les méthodes onBackup() et onRestore().
+Les classes SharedPreferencesBackupHelper et FileBackupHelper vont nous aider à traiter les différents scénarios classique de sauvegarde.
+Nous devons rédiger une classe héritant de  BackupAgentHelper et redéfinir la méthode onCreate(). Dans cette dernière, nous allons ajouter un ou plusieurs Helper suivant les besoins de l'application.
+public void onCreate()
+{
+  SharedPreferencesBackupHelper prefHelper =
+   new SharedPreferencesBackupHelper(this,"user_preferences");
+  addHelper("prefs", prefHelper);
+ FileBackupHelper fileHelper =
+   new FileBackupHelper(this, "scores", "stats");
+ addHelper("myfiles", fileHelper);
+}
+Il est possible que la sauvegarde s'effectue au même moment que l'application utilise les fichiers. La sauvegarde risque alors d'être corrompue. Il faut se protéger de cela en utilisant un lock lors de l'utilisation des fichiers.
+static final Object sDataLock = new Object();
+…
+synchronized (MyActivity.sDataLock)
+ {
+  File dataFile = new File(getFilesDir(), TOP_SCORES);
+  RandomAccessFile raFile = new RandomAccessFile(dataFile, "rw");
+  raFile.writeInt(score);
+ ra.close() ;
+ mBackupManager.dataChanged("user_preferences") ;
+}
+Il faut également utiliser le verrou dans les méthodes onBackup() et onRestore() de l'agent.
+@Override
+public void onBackup (
+ ParcelFileDescriptor oldState,
+ BackupDataOutput data,
+ ParcelFileDescriptor newState)
+{
+ synchronized (MyActivity.sDataLock)
+{
+    super.onBackup();
+  }
+}
+
+@Override
+public void onRestore(
+ BackupDataInput data,
+ int appVersionCode,
+  ParcelFileDescriptor newState) throws IOException
+ {
+    synchronized (MyActivity.sDataLock)
+   {
+      super.onRestore(data, appVersionCode, newState);
+    }
+}
+Voilà. C'est quand même plus, très facile à ajouter à une application existante. Une classe et quelques paramètres.
+Il reste juste à vérifier que la version d'Android est compatible avec ces services :
+if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.FROYO)
+{
+ …
+}
+Tester le code
+Pour tester tous cela, il faut obtenir un accès shell au périphérique ou utiliser un émulateur. Le programme bmgr permet de déclencher les événements de sauvegarde et de restauration des données.
+La première chose à vérifier est de s'assurer que le mécanisme de sauvegarde est bien activé. En effet, l'utilisateur peut refuser de l'utiliser.
+adb shell bmgr enable true
+A chaque invocation de dataChanged(), le gestionnaire enregistre l'évènement dans une pile. Vous pouvez forcer l'ajout d'un événement avec :
+adb shell bmgr backup nom.du.package
+Puis, pour déclencher la sauvegarde effectivement :
+adb shell bmgr run
+La méthode onBackup() doit être invoqué. Il est important de tester ce scénario avec l'application déjà en mémoire, et avec l'application absente de la mémoire. En effet, les effets peuvent être différents.
+Prenons l'exemple d'une application souhaitant avoir un comportement lors de son installation en mémoire. Pour cela, il faut déclarer une classe qui hérite de Application, et la déclarer dans l'attribut name du marqueur <application/> du fichier AndroidManifest.xml.
+class MyApplication extends Application
+{
+   @Override
+  public void onCreate()
+ {
+   …
+ }
+}
+Et dans le fichier AndroidManifest.xml :
+ <application
+    android:name=".MyApplication"
+   android:backupAgent=".MyBackup"
+  ...
+>
+Le cheminement classique de l'application lors que vous la démarrez consiste à exécuter la méthode MyApplication.onCreate(), puis MonActivity.onCreate(). La méthode MyApplication.onCreate() initialise généralement les paramètres globaux, lorsque l'application est démarré la première fois.
+Si un backup est demandé, la méthode MyBackup.onBackup() est invoqué.
+Si par contre, l'application n'est pas présente en mémoire, la méthode MyApplication.onCreate() est invoqué juste avant la méthode MyBackup.onBackup() est l'application s’arrête là. Il ne faut pas d'effet de bord entre les deux méthodes.
+Il est même possible que la méthode onBackup() soit invoqué, alors que l'application n'a jamais été lancé par l'utilisateur ! S'il a juste installé l'application.
+Pour tester la méthode onRestore(), il faut désinstaller l'application et la ré-installer.
+adb uninstall mon.application
+adb install mon.application.apk
+Si tous c'est bien passé, toutes les données sauvegardées doivent être restaurées.
+La méthode MyApplication.onCreate() sera invoqué avant la méthode onRestore(). Donc, il est nécessaire de rétablir les caches en mémoire initialisé dans MyApplication.onCreate() à la fin de onRestore(), au risque d'avoir des informations erronées en mémoire.
+D'autre commande sont disponibles avec l'utilitaire bmgr. wipe permet d'effacer les données d'un ancien backup. Ainsi, le backup suivant sera complet et non partiel. enabled permet de savoir si le mécanisme de sauvegarde est activé.
+Ice cream sandwich
+Depuis la version 14 d'Android (Ice Cream Sandwich), il faut également proposer des services pour sauvegarder et restituer les données dans un fichier plat. Cela ne nécessite pas d'être root. Ces méthodes sont alors utilisées par le nouveau mécanisme de backup local des terminaux (onFullBackup() et onRestoreFile()). Par défaut, l'implémentation sauvegarde toute les données présentes dans le répertoire de travail de l'application. La sauvegarde totale du terminal est chiffrée si l'utilisateur saisie un mot de passe. Il n'est donc pas possible d'y extraire des informations confidentielles.
+Pour demander la sauvegarde du terminal, il faut utiliser l'utilitaire bien connu adb. La commande backup accepte plusieurs paramètres. Il est possible ainsi de sélectionner les informations à sauvegarder. -apk permet de sauver également les applications. C'est utile si elles ne viennent pas du market android. En effet, elles ne seraient alors pas restauré lors d'une nouvelle installation. -noapk demande de ne sauver aucune application. -shared demande de sauver les données présente sur la carte SD. -noshared ne sauvegarde pas les données de la carte SD. -all sauvegarde tous. -system sauvegarde les applications systèmes, -nosystem ne les sauvegardes pas. -f <file> permet d'indiquer le nom du fichier utilisé. Par défaut, c'est backup.ab (probablement pour « Android Backup »). Il est également possible d'indiquer les noms des applications à sauvegarder. La syntaxe est la suivante :
+adb backup [-f <file>] [-apk|-noapk] [-shared|-noshared] [-all] [-system|nosystem] [<packages...>]
+Lors d'une sauvegarde, le terminal demande un mot de passe pour le fichier.
+  
+
+/// Image : grub_figure1.png ///
+Fig. 1 : Demande de mot de passe lors de la sauvegarde du terminal sous Ice Cream Sandwich.
+adb restore <file> permet alors de restaurer le terminal ou une application après avoir saisie le mot de passe.
+Les méthodes onFullBackup() et onRestoreFile() sont invoqués lors de ces sauvegardes. Il est donc possible d'intervenir pour faire le ménage en supprimant des fichiers devenu inutile, sélectionner les données à sauvegarder, etc. Mais la documentation n'est pas encore complètement publique.
+
+
+Philippe PRADOS article@prados.fr
+Architecte Smart Mobility chez AtoS

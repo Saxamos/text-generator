@@ -1,0 +1,117 @@
+﻿Architectures All-in-memory
+  
+
+Les architectures modernes exploitent toutes la mémoire comme référentiel de l'état des systèmes. Comment améliorer notablement les performances dans l'exploitation de la mémoire ?
+Par Philippe PRADOS - 2015
+www.prados.fr
+
+
+Parmi les trois types de contentions rencontrées par les architectures classiques, nous avons les IO disques, les IO réseaux et les contentions sur les accès mémoires par plusieurs threads. Étudions ces dernières.
+Nous vous proposons une nouvelle série d’articles, pour barbus ou ceux voulant le devenir, dédiée à l’exploitation de la mémoire avec le maximum de performance. Au terme de cette série, nous pourrons traiter des “algorithmes à haute fréquence”. Il s’agit d’algorithmes spécialement conçus pour exploiter les subtilités des processeurs afin d’obtenir des performances foudroyantes.
+Sans le savoir, vous en bénéficiez abondamment. On les retrouve par exemple dans les JVM Hotspot pour gérer le mot clef sychronized, dans le code des classes du package java.util.concurrent, les dernières versions de Log4j-2[1], les Complex Event Processing (CEP[2]), les bases de données en mémoire[3], ou encore les bases orientés colonnes (Hbase[4], Cassandra[5]).
+Pour faire court, un algorithme à haute fréquence doit exploiter au mieux les architectures des processeurs pour obtenir un maximum de performance. S'il doit fonctionner en multitâches, il doit éviter autant que possible les verrous. Il doit s’assurer que chaque opération sur les données ne présente pas de condition de course (race condition) invalidant le modèle en mémoire, lors d’une modification concurrente par plusieurs processeurs. Généralement, l’objectif est triple :
+* Exploiter au maximum la mémoire
+* Éviter autant que possible les verrous. Il faut qu’à tout moment, l’algorithme puisse poursuivre son exécution
+* Exploiter au maximum les caches des processeurs pour l'accès à la mémoire
+Il ne faut pas oublier que la latence d'accès à la mémoire RAM[6] principale peut varier de 10 à 100 nanosecondes. Avec 100ns, il est possible pour un CPU de 3.0GHz d'exécuter 1200 instructions !
+Des algorithmes bien conçus sont capables de gérer 135 millions de message par seconde[7] avec un double socket Intel(R) Xeon(R) CPU E5-2630 @ 2.30GHz sous Linux et OpenJdk 1.7.09 !
+Ces approches optimisées sont utilisées au CERN, dans les salles de marchés, dans des jeux massivement multijoueurs, ou dans toutes vos applications Java. Java8 ajoute beaucoup d'améliorations sur les algorithmes et l'implémentation de la JVM pour exploiter au mieux les quatorze secrets présentés à la fin de cette série d’articles.
+Log4J-2 propose une implémentation[8] asynchrone à haute fréquence, bien plus efficace que le modèle classique, avec un débit de près de 300.000 messages par seconde avec 64 threads.
+Dans cette série d’articles, nous commencerons par les différentes architectures des logiciels exploitant la mémoire comme référentiel. Puis nous réviserons nos connaissances sur les architectures des processeurs, avant de découvrir les nombreuses astuces utilisées par les algorithmes à haute fréquence pour être toujours plus rapides. Nous illustrerons notre propos avec des extraits de codes venant généralement des sources de Java.
+De nombreux liens parsèment les articles. Suivez-les pour en savoir plus ! (Référence à la fin)
+Processus et threads
+Avant tous, un petit rappel de la structure Processus/thread et de la mémoire virtuelle et physique.
+Un processus héberge des threads et est associé à une table permettant de convertir les adresses mémoires virtuelles en adresses mémoires physiques.
+  
+
+Architectures pour les données en mémoires
+Attaquons par une vision au niveau architecte. Pour une application serveur, il existe plusieurs stratégies pour gérer la mémoire :
+1. Un seul et unique thread pour gérer toutes les requêtes.
+2. Un processus par client.
+3. Un thread par client.
+Un seul et unique thread pour gérer toutes les requêtes
+C’est l’approche choisie par node.js[9]. La mémoire est partagée par tous les clients Web, mais un seul client est actif à la fois. À chaque demande d’I/O, le client Web actuel est mis en pause. Un autre client Web peut alors être traité. Si un algorithme est consommateur en CPU, cela bloque tous les autres clients Web. La CPU d’un seul core est parfaitement exploité. Ce modèle n’est pas capable d’exploiter les différents cores des processeurs actuels. Cela est généralement compensé par le lancement d’autant d’instances de serveurs node.js que de core. Ce modèle propose un partage de la mémoire entre les clients Web, avec aucune contention possible lors des accès car il n'y a qu'un seul thread.
+Un processus par client
+C’est l’approche proposée par le modèle CGI[10] (Common Gateway Interface). À chaque requête, un processus est lancé. Ce dernier possède un espace mémoire privé, isolé de tous les autres processus. Dans ce modèle, aucune case mémoire n’est partagée. Ce modèle n’est pas économe en mémoire ni efficace en performance.
+Une approche un peu plus efficace consiste à utiliser un fork par client. C’est l’approche généralement utilisée par les programmes codés en C, car il n’existait pas de modèle normalisé d’accès à la mémoire. Pour chaque client, un fork du processus est effectué. Tous les segments mémoires sont alors partagées, mais sous contrôle. L’OS copie les segments mémoires entre les processus forkés, si et seulement si, une écriture est effectuée. C’est la technologie copy-on-write (COW) proposé par les OS. Les autres segments, utilisés uniquement en lecture, sont partagées par les différents processus. Ce modèle est plus économe en mémoire et plus rapide à déclencher.
+Dans le schéma suivant, le processus et son fork partagent les segments 1,2,3 et 5. Le segment 4 a été dupliqué par l'OS lors d'une écriture par le fork.
+ schema 01.png 
+
+Un thread par client
+Les serveurs FTP, SMTP, POP3 ou IMAP utilisent généralement un couple de threads branché sur le socket du client. Un couple de threads est dédié à chaque connexion utilisateur. Multiplier les clients c’est multiplier les threads et donc consommer de la mémoire pour les piles d’appels et ralentir l’ensemble. La mémoire est partagée par tous les clients, avec des risques d’accès concurrents aux mêmes espaces mémoires. L'utilisation de verrous permet de contrôler les accès, mais avec un fort risque de dead-lock.
+Les serveurs JavaEE utilisent plutôt un pool de threads, car les requêtes HTTP sont atomiques. Dans ce modèle, les threads sont recyclés. Les clients Web en surnombre sont mis en attente. Comme dans le modèle précédant, la mémoire est partagée par plusieurs clients Web.
+Rien en mémoire
+Pour éviter les risques dûs aux accès concurrents à la mémoire, la tentation est grande d’avoir des serveurs sans état en mémoire (stateless). Les requêtes sont traitées dans un thread, mais aucune information n’est partagées dans la RAM du serveur. C’est la base de donnée qui fait office de référentiel. La base de donnée joue le rôle de mémoire partagée. Elle devient le goulet d’étranglement. Maintenant, des bases de données « en mémoire[11] » sont utilisées, tel que Redis[12] ou Hazelcast[13]. Les données des sessions Web sont portées par des tables de clef-valeur. Des communications entres les nodes permettent de dupliquer les données en RAM.
+Ce modèle permet une distribution des traitements sur plusieurs nodes (scalabilité horizontale), à la seule condition que le référentiel choisi tienne la charge. S’il est utilisé via le réseau, ce dernier est très fortement sollicité. Cela à un coût en terme de performance.
+Il est nécessaire de récupérer et de persister les contextes des clients Web lors de chaque requête. Chaque requête HTTP client entraîne au minimum deux requêtes vers la base de donnée via le réseau. Il y a également des difficultés lorsque plusieurs requêtes HTTP du même client sont effectuées au même moment. Comment sérialiser les requêtes HTTP du client s’il peut être pris en charge simultanément par plusieurs serveurs ? Des pirates peuvent exploiter cette faiblesse pour rendre instable les données. Les transactions peuvent aider à poser un verrou sur la base de donnée. Ce n’est généralement pas possible avec les bases NoSQL.
+Pour proposer des solutions avec très peu de latence, pour des traitements à haute fréquence, il est nécessaire de proposer d’autres approches.
+Tout en mémoire
+Une application manipule des données en mémoire et des données sur une mémoire de masse tel qu’un disque. Pour l’utilisation des IO, les applications réactives[14] proposent de n’utiliser que des IO asynchrones et pas plus de threads que de cœurs disponibles. Les IO asynchrones étant gérées correctement par l’OS, il reste à s’interroger sur l’utilisation de la mémoire par ces applications. Si un thread bloque un autre thread, l’application n’est plus réactive.
+Pour avoir le maximum de performance, les algorithmes à haute fréquence ne peuvent fonctionner qu’en mémoire. Toutes les données doivent être en mémoire. Il faut alors gérer efficacement les accès concurrents. C'est justement l'un des objectifs des approches à haute fréquence.
+Les IO sont déportés dans des flux de traitements asynchrones, en dehors de ces algorithmes.
+Partage de mémoire entre processus
+Il existe des solutions permettant de partager une partie de la mémoire entre les processus : la mémoire partagée. Ainsi, il est possible de tuer un processus sans perdre les données partagées.
+Les OS proposent cela. Un segment mémoire est alloué dans une zone spéciale, permettant à tous les processus de partager la même adresse mémoire virtuelle avec les mêmes données.
+ schema 02.png 
+
+Il est également possible d'exploiter des fichiers mappés. Par exemple, OpenHFT[15] propose des algorithmes de Map[16] et de Queue[17] qui exploitent de la mémoire hors-heap de la JVM, mappé sur un fichier sur disque. L’idée est d’utiliser les capacités des OS à mapper un fichier en mémoire.
+L’OS dédie des segments mémoires à des zones d’un fichier. Les données sont modifiées directement en mémoire. S’il est nécessaire d’avoir plus de mémoire que ce que la plate-forme propose, l’OS sélectionne certains segments qu’il sauve dans le fichier associé pour remonter d’autres segments en mémoire.
+ schema 03.png 
+
+C’est exactement le modèle utilisé pour le Swap-file des OS. MongoDB utilise[18] également cette approche.
+Ce modèle est très séduisant. En effet, cette mémoire résiste à la perte d’une JVM. Il est possible de la redémarrer et de retrouver immédiatement toutes les données. Ainsi, après un crash de la JVM, le démarrage d'un serveur est instantané. Cela est utilisé dans des architectures où plusieurs JVM sont lancées sur le même node. (Utiliser plusieurs JVM permet d’utiliser plusieurs GC en parallèle[19], mais sur des espaces mémoires réduit)
+En exploitant cette mémoire en mode append-only (écriture systématique à la fin), il y a en mémoire les données les plus fraîches. Seules les données anciennes sont déposées sur disque si nécessaire, par l’OS. Il est bien entendu préférable d'utiliser un disque physique local au node, et non un disque sur le réseau. Un disque SSD est idéal.
+C’est un modèle très séduisant pour gérer les événements comme les logs des transactions financières, le suivit de colis ou le trafic de site WEB par exemple.
+D’autres approches exploite le même processus mais au lieu de stocker le segment sur disque, elles compressent le segment en mémoire. Les Hyperviseurs procèdent souvent ainsi.
+Pour étendre ce modèle entre plusieurs nodes, les données peuvent être synchronisées via le réseau, en UDP ou TCP.
+Le fait d’utiliser de la mémoire hors-heap, permet de l’exclure du ramasse-miettes. Cela évite les contentions et évite les pauses inévitables dans certaines phases du nettoyage.
+Utiliser de la mémoire hors-heap n’a rien de spécial. Les piles des threads, le code Java, les buffers NIO sont tous hors-heap. Des API Java permettent maintenant d’exploiter cela sans difficultés (Unsafe.allocateMemory()[20]). Cassandra utilise[21] également une mémoire hors-heap. Tachyon[22] est le gestionnaire de fichier hors-heap synchronisé préconisé par Spark.
+Une autre approche consiste à utiliser une mémoire Flash comme extension de la mémoire. Des API comme  FatCache[23] ou XAP MemoryXtend[24] utilisent cette mémoire solide pour y stocker des conteneurs clef/valeur. Le code est optimisé pour tenir compte des contraintes technologiques (il faut réduire les écritures successives sur la même page, bénéficier de l'accès rapide en lecture, etc.). La persistance s'effectue généralement via un tampon circulaire et un index léger en mémoire.
+Partage de mémoire entre threads
+Les threads partageant le même processus. Leurs données sont mutualisées. Il est plus classique de les partager directement dans la heap de la JVM ou du programme C/C++.
+ schema 04.png 
+
+Mais cela présente plusieurs difficultés. Comment s’assurer que les modifications sont consistantes ? Comment garantir que deux traitements ne vont pas modifier simultanément les mêmes données, au risque de rendre tous cela inconsistant ?
+La première certitude est que la pile d’appel, avec les variables locales et les paramètres, ne peut être partagée. Par construction, les types primitifs et les références sur les objets présents dans la pile ne sont manipulés que par un seul et unique thread. Tout le reste est partagé par tous les threads.
+Pour gérer cela Java propose la synchronisation des méthodes. Cela est utilisé depuis la toute première version de Java. Des améliorations ont été proposées pour séparer les verrous lors des traitements de lecture des verrous lors des écritures (ReadWriteLock[25]). Cela permet de réduire les blocages inutiles.
+Nous verrons plus tard les techniques utilisées par Java pour optimiser l’activation de verrous lors de l'interprétation du mot clé synchronize.
+Haute disponibilité
+Si les données sont en mémoire, comment gérer la haute disponibilité ? Il y a plusieurs stratégies possibles.
+La première consiste à faire communiquer les nodes de façons asynchrones, lors des modifications en mémoire. Deux ou plusieurs nodes partagent des données. Cela pollue le réseau et peut dégrader les performances.
+Pour les algorithmes à haute fréquence, il est généralement préférable de donner suffisamment de RAM pour que toutes les données y soient présentes (on rencontre de plus en plus souvent des serveurs avec 2To de RAM). Seules les données chaudes sont en mémoires (les flux de transactions de la journée par exemple). Éventuellement, un dépôt sur SSD permet d'augmenter à moindre coût la mémoire théorique.
+La haute disponibilité est gérée par une duplication des flux en amont du node. Les requêtes sont jouées simultanément sur plusieurs nodes, chacun ayant une vue des données en mémoire. Si un node tombe, un autre est immédiatement disponible.
+ schema 05.png 
+
+Dans le prochain article, nous réviserons nos connaissances sur les architectures des processeurs en nous focalisant sur les informations exploités par les algorithmes à haute fréquence. Le dernier article révélera les quatorze secrets de ces algorithmes en exploitant tout ce nous avons expliqué. Des extraits des sources de la JVM permettrons d’illustrer les différentes approches.
+Conclusion
+Exploiter au maximum la mémoire est le lot de tous les nouveaux produits “à la mode” comme les bases de données NoSQL, les implémentations de Map-Reduce distribués, les nouveaux frameworks, etc. Sélectionner une architecture adaptée est un impératif indispensable.
+Comment choisir ? Si la mémoire doit résister à la perte d’un processus, alors il faut utiliser les approches de mémoires partagées entre processus, directement en RAM ou via un fichier monté en mémoire.
+Si les données peuvent être récupérée sur un autre node, alors les approches threads in ou hors heap sont efficaces.
+
+
+________________
+[1] https://logging.apache.org/log4j/2.x/manual/async.html#Performance
+[2] https://en.wikipedia.org/wiki/Complex_event_processing
+[3] https://en.wikipedia.org/wiki/In-memory_database
+[4] https://hbase.apache.org/book.html#regionserver.arch
+[5] http://www.datastax.com/documentation/cassandra/2.0/cassandra/operations/ops_tune_jvm_c.html
+[6] http://mechanical-sympathy.blogspot.fr/2013_02_01_archive.html
+[7] http://psy-lob-saw.blogspot.fr/2013/03/single-producerconsumer-lock-free-queue.html
+[8] https://logging.apache.org/log4j/2.x/manual/async.html#Performance
+[9] http://nodejs.org/
+[10] https://fr.wikipedia.org/wiki/Common_Gateway_Interface
+[11] https://en.wikipedia.org/wiki/NoSQL#KV_-_RAM
+[12] http://redis.io/
+[13] http://hazelcast.com/
+[14] http://blog.octo.com/tag/reactive/
+[15] https://github.com/OpenHFT
+[16] https://github.com/OpenHFT/Chronicle-Map
+[17] https://github.com/OpenHFT/Chronicle-Queue
+[18] http://docs.mongodb.org/manual/faq/storage/
+[19] http://blog.octo.com/la-mort-prochaine-du-ramasse-miettes/
+[20] http://grepcode.com/file/repository.grepcode.com/java/root/jdk/openjdk/8-b132/sun/misc/Unsafe.java#481
+[21] http://www.datastax.com/dev/blog/off-heap-memtables-in-Cassandra-2-1
+[22] http://tachyon-project.org/
+[23] https://github.com/twitter/fatcache
+[24] http://www.gigaspaces.com/xap-memoryxtend-flash-performance-big-data
+[25] http://docs.oracle.com/javase/8/docs/api/java/util/concurrent/locks/ReadWriteLock.html

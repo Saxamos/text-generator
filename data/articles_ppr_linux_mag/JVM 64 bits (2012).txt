@@ -1,0 +1,180 @@
+﻿Java 64 bits
+  
+
+Java a été initialement conçu pour des architectures 32 bits ou inférieur. La généralisation des machines 64 bits entraîne une mise à niveau de la machine virtuelle. Cela n'est pas toujours pertinent en terme de vitesse et de consommation mémoire.
+Par Luarent Legrandois et Philippe PRADOS - 2012
+www.prados.fr
+Les processeurs 64 bits
+Les processeurs AMD64 de AMD et EM64T d'Intel en mode 64 bits bénéficient d'une nouvelle architecture et de nouvelles instructions, exploitées par le compilateur JIT de la JVM.
+Ces processeurs possèdent les caractéristiques suivantes :
+* gestion complète des entiers 64 bits : tous les registres généraux sont en 64 bits. Les push et les pop sur la pile sont toujours en 64 bits.
+* Registres généraux doublés pour atteindre 16 registres. Ainsi, la plupart des paramètres des fonctions ou des méthodes peuvent être passés via des registres.
+* Registre XMM supplémentaire, utilisé pour améliorer l'application d'une même instruction à plusieurs mémoires simultanément (non utilisé avec un code Java).
+* Adressage mémoire virtuel plus grand, jusqu'à 256 tébioctets (248 octets)
+* Espace mémoire physique plus grand, jusqu'à 1 tébioctet.
+* Accès aux données, relatif au pointeur d'instruction. Permet de générer du code indépendant de sa position en mémoire, le rendant plus efficace.
+* Instructions arithmétiques SSE et SSE2
+* Drapeau de page de non exécution. Permet d'améliorer la sécurité.
+* Suppression d'anciennes fonctionnalités qui ne sont plus utilisées par les systèmes d'exploitations.
+Deux modes d'exécutions cohabitent. Le mode « Long » permettant de bénéficier de toutes les améliorations du processeur, avec exploitation des registres en 64 bits ; et le mode « Legacy » permettant de retourner au mode 32 pour exécuter d'anciens systèmes d'exploitations 32 bits sur un processeur 64 bits.
+Adressage de la mémoire
+Les microprocesseurs 32 bits permettent un adressage mémoire de 4Go. Dans les faits, seul 2Go sont adressable par les applications. Le reste étant réservé au noyau du système d'exploitation et aux librairies partagées.
+Les architectures 64 bits offrent un adressage mémoire plus important, permettant de dépasser la barrière de 4Go pour atteindre une limite théorique de 256 tébioctets virtuels.
+Cela a un impact sur la taille des programmes compilés, car tous les pointeurs et les entiers prennent deux fois plus de place en mémoire ( 4 bytes en 32 bits contre 8 bytes en 64 bits). À l'exécution, le cache de premier niveau est plus rapidement saturé, avec un impact négatif sur les performances.
+Les pointeurs sur les objets Java peuvent être en 64 bits. Cela permet d'adresser plus d'objets en mémoire, au prix d'une dégradation des performances de 10 à 30%. Cela s'explique par l'utilisation moins efficace du cache de premier niveau. De nouvelles technologies permettent de réduire ces impacts négatifs.
+Les types primitifs
+  
+
+Les machines virtuelles Java imposent une taille fixe pour les types primitifs. Ainsi, que l'architecture soit en 8, 16, 32 ou 64 bits, les entiers sont toujours sur 32 bits.
+L'extension de la taille des registres et de leurs nombres permet plusieurs améliorations significatives dans la compilation JIT.
+- pour les int et les float, toujours en 32 bits dans la JVM, il est possible d'exploiter les deux moitiés d'un registre 64 bits indépendamment.
+- pour les double et les long, il est possible d'utiliser des registres spécifiques. De plus, la modification d'un type long devient atomique. Cela permet, si la portabilité 32 bits n'est pas souhaitée, d'éviter d'utiliser des blocages ou des synchronisations lors de leurs modifications par plusieurs processeurs ou threads. L'attribut volatile permet une manipulation sans risque en multi-tâches de ces variables.
+- l'utilisation des registres complémentaires des architectures 64 bits permet d'utiliser une très grande partie des paramètres et des variables locales dans les registres. Cela contribue à une amélioration des performances dans les traitements.
+Types JAVA
+(en bits)
+	Plate-forme 32 bits
+	
+
+	
+
+	Plate-forme 64 bits
+	
+
+	
+
+	Taille champ
+	Taille Heap
+	Taille champ
+	Taille Heap
+	boolean
+	8
+	32
+	8
+	64
+	byte
+	8
+	32
+	8
+	64
+	char
+	16
+	32
+	16
+	64
+	short
+	16
+	32
+	16
+	64
+	int
+	32
+	32
+	32
+	64
+	float
+	32
+	32
+	32
+	64
+	long
+	64
+	64
+	64
+	64
+	double
+	64
+	64
+	64
+	64
+	reference
+	32
+	32
+	64
+	64
+	Return
+	32
+	32
+	64
+	64
+	
+
+La compilation JIT bénéficie des registres supplémentaires, permettant sur certaines architectures, d'avoir une dégradation des performances limités à 15%, malgré la moins bonne exploitation du cache de premier niveau.
+Les traitements invoqués par la JVM pour communiquer avec son environnement, sont intégralement en 64 bits. Cela concerne les api natives exécutée via JNI ainsi que les services du système d'exploitation. Ce dernier consomme plus de mémoire que son équivalent en 32 bits.
+Taille mémoire
+Comme pour toutes les machines virtuelles, augmenter la taille mémoire maximum réservée à une machine virtuelle présente deux effets : une durée de pause plus importante lors de l'exécution du ramasse-miette complet, partiellement compensée par son exécution moins fréquente.
+Quelle que soit l'architecture, il est conseillé d'ajuster la mémoire maximum de la JVM aux exigences réelles de l'application, et non de prendre le maximum disponible comme c'est trop souvent le cas. Le temps de pause maximum pour le nettoyage de la mémoire doit être de moins d'une seconde. En augmentant la mémoire disponible, on augmente également la durée de la pause de la JVM. Le volume de donnée à traiter est alors trop important pour une utilisation efficace de l'application, c'est à dire sans pause du processus sur une période longue.
+Pour compenser cela, de nouveaux algorithmes de ramasse-miettes concurrents ou parallèles sont apparus, avec pour objectif de limiter au maximum les pauses de la JVM. Pour cela, les algorithmes travaillent en tâche de fond sur des segments de la mémoire. Ils exploitent, si possible, les différents processeurs et cores. Un paramètre permet de définir un délai maximum acceptable de pause du processus Java. L'algorithme calcule des prédictions avant de sélectionner la zone mémoire où il va travailler. Seule une portion de la mémoire est alors nettoyée. Le processus intervient plus régulièrement. Ces traitements étant asynchrones, ils ont un impact sur la consommation des ressources, normalement disponible pour l'application. L'impact est plus important lorsque le système ne possède qu'un seul CPU 64 bits.
+Il est fortement recommandé d'utiliser les algorithmes asynchrones lors de l'utilisation d'un volume de mémoire important. Un tuning spécifique est à prévoir.
+Mode hybride
+Pour réduire l'impact négatif sur les performances lors de l'utilisation d'une JVM 64 bits, un mode hybride permet d'utiliser une JVM 64 bits avec un adressage mémoire limité à 32 bits. Une partie des pointeurs, mais pas tous, utilisent une approche compressée à 32 bits. À chaque accès, il faut décoder les pointeurs 32 bits pour les convertir en pointeurs 64 bits. Ce traitement complémentaire est efficace et permet de compenser l'impact d'une utilisation pure 64 bits. Chaque pointeur 32 bit est multiplié par huit, puis ajouté au pointeur de base de la mémoire réservé aux objets Java. Cela permet de référencer un milliard d'objets (et non byte) ou un tas allant jusqu'à 32 Go. Les structures de données sont alors plus compactes.
+L'option Hotspot Java -XX:+UseCompressedOops permet d'activer ce mode.
+Pour transformer un pointeur court 32 bits en pointeur long 64 bits, il faut appliquer la formule suivante :
+<wide-result 64b> = <wide-base 64b> + (<narrow-oop 32b> << 3) + <field-offset>.
+La lecture d'un pointeur court est plus complexe car il faut tenir compte de la valeur NULL.
+if (<narrow-oop 32b> == NULL)
+  <wide-result 64b> = NULL
+else
+  <wide-result 64b> = <wide-oop-base 64b> + (<narrow-oop 32b> << 3)
+Si la mémoire maximum réelle est inférieure à 4Go, il est possible d'utiliser les erreurs de pages pour simplifier la détection de la valeur NULL. Il faut alors que la base soit égale à zéro. Dans ce cas, le code se limite à un simple ajustement du pointeur.
+ <wide-result 64b> = <wide-oop-base 64b> + (<narrow-oop 32b> << 3)
+La JVM utilise plusieurs stratégies pour optimiser la gestion d'une base mémoire à zéro.
+- le code essaye d'allouer une mémoire inférieure à 4Go pour ne pas avoir à décoder les pointeurs cours. Les pointeurs 32 bits sont directement exploitables.
+- si ce n'est pas possible, ou s'il est nécessaire d'avoir plus de mémoire, la JVM alloue une mémoire inférieure à 32Go et utilise le décodage sans détection de la valeur NULL.
+- si cela échoue encore, la JVM alloue la mémoire nécessaire et utilise le code complet pour le décodage des pointeurs cours, avec vérification à chaque étape du cas particulier de la valeur NULL.
+Voici un exemple de code assembleur pour écrire une donnée 32 bits à l'adresse d'un pointeur court.
+movl R10, [R9 + R8<<3 + 16]
+Les pointeurs sur les objets ou les tableaux et les pointeurs internes des objets sont concerné. Sont exclus de cette optimisation le pointeur this et les structures des classes.
+Dans l'interpréteur Java, les pointeurs ne sont pas compressés. Cela inclus la pile, les variables de la pile, les arguments et les retours de méthode.. La compression est effectuée lors de l'écriture en mémoire, et la décompression lors de la lecture.
+Dans le compilateur JIT, les pointeurs sont compressés ou non suivant différentes optimisations.
+Le tableau suivant reprend les différentes stratégies suivant la taille mémoire nécessaire :
+Exigence mémoire virtuelle
+	Impact/Contrainte
+	M < 2Go
+	Partout
+	2Go < M  < 3Go
+	Uniquement sous Linux
+	M < 4Go
+	Utilisation de pointeurs 32 bits, sans conversion
+	4Go  < M < 32Go
+	Utilisation de pointeurs 32 bits, avec conversion mais sans traitement de la valeur NULL
+	32Go < M < 1 milliard d'objets
+	Utilisation de pointeurs 32 bits, avec conversion et traitement de la valeur NULL
+	1 milliard d'objets < M
+	Utilisation de pointeurs 64 bits
+	Calculs importants
+	
+
+	Il est donc recommandé d'utiliser l'option « Compressed oops » en architecture 64 bits, sauf à avoir une bonne raison.
+Si l'option n'est pas présente sur la version de la JVM envisagée, il est nécessaire d'effectuer des tests de performance spécifique à l'application pour sélectionner l'approche 32 ou 64 bits.
+Large memory pages
+Au démarrage, un processus alloue par défaut un multiple de 4 kilo octets de mémoire pour pouvoir démarrer correctement. Les principaux systèmes d'exploitation en 64 bits (Solaris 9+, Linux avec Kernel 2.6+, Windows 2003 serveur) permettent de changer la taille de mémoire à allouer.
+Les « HugePages » (Linux) ou « Large Pages » (Windows) permettent d'allouer jusqu'à 256 Mo (2 Mo par défaut) au lieu de la valeur par défaut de 4 Ko.
+Cette fonctionnalité était déjà disponible pour les architectures x86 (32 bits), mais a rarement été utilisée, car le gain de performance avec seulement 4 Go de RAM adressable par machine était très faible. Avec l'introduction de l'architecture x86_64 (64 bits), le nombre d'objets adressables s'élève à 16 milliards . Avec des JVM qui s'élèvent à plus de 4 Go le paramétrage avec « HugePages » devient plus pertinent.
+L'option Hotspot Java -XX:+UseLargePages permet d'activer cette fonctionnalité avec la configuration par défaut. Afin de préciser le nombre d'octets à allouer, il convient d'utiliser :  -XX:LargePageSizeInBytes=<n> (par exemple avec <n> = 2m)
+L'option -XX:+UseLargePages optimise l'utilisation du Translation Lookaside Buffer (TLB) en allouant plus de mémoire, ce qui permet une moindre utilisation de la CPU. Inconvénient : les « large memory pages » ne peuvent pas être « swappées ». Il faut alors prévoir suffisamment de mémoire physique. Notez qu'un swap de la mémoire Java entraîne un impact négatif très important lors du déclenchement de ramasse-miettes.
+Il peut être nécessaire de modifier également la configuration du système d'exploitation. Par exemple sous Red Hat Linux il faut modifier certains fichiers pour pouvoir utiliser l'option -XX:+UseLargePages.
+Cc-NUMA
+Dans les architectures cc-NUMA, lorsque plusieurs processeurs partagent la même mémoire, il est nécessaire de synchroniser leurs caches si des traitements parallèles exploitent les mêmes zones mémoires. Il n'est pas possible de gérer les zones d'allocations mémoires par les programmes Java. Des collusions sont alors fréquentes entre les différents processus.
+Pour corriger cela, le paramètre -XX:+UseNUMA permet d'appliquer de nouveaux algorithmes pour l'allocation des objets et le ramasse-miettes. Les objets d'un même processeur sont alloués dans la même zone mémoire. Le ramasse-miettes peut faire migrer un objet de la mémoire d'un processeur à un autre.
+Cela contribue à améliorer les performances et doit être testé pour chaque application.
+Portabilité
+Les applications Java peuvent être immédiatement portées sur une architecture 64 bits, en bénéficiant de la portabilité du langage.
+Suivant les systèmes d'exploitation, il faut lancer des JVM différentes pour sélectionner le mode d'exécution 32 ou 64 bits, ou utiliser un paramètre spécifique en ligne de commande. ( d32 ou  d64).
+Certains composants Java n'utilisent pas le mode 64 bits, car cela n'est pas nécessaire (javadoc, javap, etc.). D'autres ne sont pas disponibles en 64 bits (Java Web Start et Java Plugin).
+Librairies JNI
+Par contre, les librairies JNI doivent être revues pour s'assurer qu'elles sont bien compatibles 64 bits. Par exemple, le type long est en 32 bits sous Windows et en 64 bits sous Linux. Il est nécessaire de les re-compiler avec les options adéquates. Les API JNI publiques sont compatibles avec les sources C ou C++.
+Tirer parti de l'architecture 64 bits
+L'architecture 64 bits ne permet pas (hors optimisation spécifique du code compilé en JIT) d'augmenter le nombre de traitements simultanés. La fréquence des processeurs étant stables depuis plusieurs années (pour des raisons de dissipation de la chaleur), il n'est plus possible d'améliorer les performances d'une application gratuitement, simplement en changeant de technologie.
+Pour améliorer les performances, il faut revoir le développement pour tirer partie des spécificités de l'environnement, en exploitant le maximum de mémoire.
+Les applications sans état ne peuvent tirer parti de l'architecture 64 bits que si elles utilisent des caches importants. Il faut revoir l'application pour utiliser des caches plus grands et plus systématiquement.
+Si l'application n'a pas été conçue pour tenir compte de l'extension de la mémoire adressable, elle peut bénéficier des améliorations de la compilation JIT en se limitant au mode d'adressage mémoire 32 bits dans une JVM 64 bits.
+Grille de décision
+Il est important d'identifier les différents scénarios possibles pour exécuter un code dans un serveur 64 bits. Seul des tests de charge pourront déterminer l'approche la plus efficace.
+Les éléments pouvant avoir un impact sur les performances sont nombreux et interdépendants. Améliorer un indicateur peut avoir un impact négatif sur un autre.
+La première chose à faire avant toute analyse est de déterminer la taille mémoire réellement nécessaire à l'application.
+Une fois la taille mémoire minimum identifiée pour être capable d'exécuter plusieurs scénarios en parallèle, il est possible d'augmenter la charge, en ayant toujours pour objectif d'avoir un temps de pause de la machine virtuelle inférieure à une seconde.
+L'objectif du paramétrage est de permettre d'améliorer les performances globales de l'application, tout en économisant le nombre de CPU. Il faut donc trouver un juste milieu pour augmenter le nombre de traitements parallèles sans dégrader les performances.
+Le premier paramètre à faire varier est le nombre de traitements simultanés gérés par le serveur d'application. C'est l'objectif principal de l'optimisation. Si les performances sont là, pas besoin d'aller plus loin. Sinon, il faut augmenter la taille mémoire allouée à la machine virtuelle, tous en restant en 32 bits. S'il est nécessaire d'augmenter encore la taille mémoire, il faut alors essayer le mode 64 bits avec les pointeurs compressés. Enfin, en dernier recours, il est envisageable d'utiliser le mode full 64 bits.
+Une fois les limites trouvées, il est temps d'intervenir sur le choix de l'algorithme de ramasse-miette et sur les paramètres associés.
+Laurent Legrandois, Philippe Prados
+Consultants Open Sources - AtoS

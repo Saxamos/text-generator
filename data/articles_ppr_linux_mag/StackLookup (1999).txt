@@ -1,0 +1,60 @@
+﻿StackLookup
+  
+
+Comment connaître l'état de la pile d'appel ?
+Par Philippe PRADOS - 1999
+www.prados.fr
+Le framework de debug permet de sélectionner dynamiquement les classes ou les packages étant autorisés à afficher une trace. Pour réaliser cela, il a fallu trouver une technique pour consulter l'état de la pile lors de l'affichage d'une trace. Si, en remontant la pile, on rencontre une méthode appartenant à une classe ou un package ne pouvant pas utiliser les traces, la méthode ne fait rien.
+Comment connaître l'état de la pile ?
+Approche propre
+La méthode getClassContext() de la classe SecurityManager permet de faire cela. Elle retourne un tableau de référence sur des Class dans l'ordre d'appel. Cette méthode n'est pas static. Elle aurait pu car elle ne fait appel à aucun attribut. De plus, elle propose un accès protected. Il faut alors rédiger une sous-classe. StackLookup fait cela.
+public class StackLookup extends SecurityManager
+{
+  public Class[] getClassContext()
+  { 
+    return super.getClassContext();
+  }
+}
+Ensuite, pour connaître l'état de la pile d'appel, il faut créer une instance et appeler la méthode.
+new StackLookup().getClassContext();
+Cette approche est pratique, efficace, mais ne fonctionne pas dans tous les cas. Elle oblige à créer une instance SecurityManager.
+Approche Hack
+Suivant les implantations, le constructeur de SecurityManager génère une exception s'il existe déjà une instance enregistrée dans la classe System.
+public SecurityManager
+{ 
+  ...
+  public SecurityManager()
+  { 
+    if (System.getSecurityManager()!=null)
+      new SecurityException("security manager already installed.");
+  }
+}
+La méthode System.setSecurityManager() permet d'initialiser une fois pour toute l'instance de sécurité à utiliser. Lorsqu'on lance une application Java, il n'y a pas de SecurityManager installé. Il est alors possible d'en ajouter un. Ensuite, il n'est plus possible de l'enlever.
+On ne cherche pas à installer un SecurityManager mais à utiliser sa méthode getClassContext(). Il faut trouver une astuce pour construire une instance SecurityManager sans appeler son constructeur.
+Regardons comment le constructeur de StackLookup est généré par le compilateur.
+void <init>()
+{ 
+  aload_0
+  invokespecial void SecurityManager.<init>()
+  return
+}
+La méthode <init> est le constructeur par défaut de StackLookup. Elle appelle la méthode SecurityManager.<init>(). C'est la traduction de l'instruction super().
+Ce que nous voulons, c'est appeler directement le constructeur de la classe Object pour passer outre le constructeur de SecurityManager qui nous pose problème. Nous rédigeons alors une classe spéciale, StackLookupNotVerify, qui hérite de SecurityManager, mais propose un constructeur particulier. Cette classe est rédigée en assembleur Java car il n'est pas possible de l'écrire directement avec le langage.
+class dbg.StackLookupNotVerify extends java.lang.SecurityManager
+{
+  void <init>()
+  { 
+    aload_0
+    invokespecial void Object.<init>()
+    return
+  }
+  ...
+}
+Cette version nous permet d'appeler la méthode getClassContext() sans que la construction de l'instance soit rejetée par le constructeur de SecurityManager.
+Cette approche est spéciale mais efficace. Malheureusement, elle ne fonctionne pas dans tous les cas.
+Approche garantie
+Le constructeur de StackLookupNotVerify n'est pas normal. Cela est parfois détecté par les vérificateurs de j-code. Netscape par exemple, rejète cette classe avec une exception VerifyError. Ce n'est pas grave. Capturons là, et utilisons une dernière stratégie qui fonctionne dans tous les cas.
+Tout le monde connaît la méthode printStackTrace() disponible pour toutes les exceptions. Cette méthode affiche un état de la pile. C'est justement ce que nous cherchons. Il faut alors créer un ByteArrayOutputStream et demander l'affichage de la pile dans ce tampon. Ensuite, il faut analyser la chaîne pour en déduire l'état de la pile. L'analyse doit être soignée car les différentes machines virtuelles affichent différemment l'état de la pile. Le code a été testé avec les principales machines virtuelles : IBM, Sun, Microsoft et Netscape.
+Cette solution est efficace, portable, mais lente.
+Conclusion
+Lors du premier appel à la méthode StackLookup.GetContext() une tentative est effectuée avec les trois approches. La gagnante sera par la suite utilisée directement. Je vous invite à consulter les sources présents dans le framework. Si vous le voulez, vous pouvez supprimer le fichier StackLookupNotVerify.class, le code fonctionne tout de même. Il ignore alors la deuxième stratégie.

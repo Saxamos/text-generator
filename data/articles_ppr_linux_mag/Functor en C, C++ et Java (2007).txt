@@ -1,0 +1,158 @@
+﻿Functor en C, C++ et Java
+  
+
+Les functors sont des objets portant des traitements. La plupart des algorithmes ont besoin d'être adaptés pour tenir compte du contexte. Par exemple, un algorithme de tri à besoin de comparer deux objets. La notion de comparaison est variable suivant le contextes.
+Par Philippe PRADOS - 2007
+www.prados.fr
+Comparer des données scalaire n'est pas identique à comparer des coordonnées d'objets complexes à plusieurs attributs. Pourtant l'agorithme de tri n'a pas à en s'en préocuper. La seule chose qu'il a besoin est de pouvoir savoir si un objet doit être placé avant ou après un autre. Comment livrer la règle à appliquer pour comparer les objets ? La première idée consiste à intégrer différentes déclinaisons pour effectuer la comparaison et à ajouter un paramètre permettant de le sélectionner. Par exemple, l'algorithme peut proposer de comparer les différents types primitifs et proposer deux déclinaisons pour les chaines de caractères. La fonction reçoit alors un paramètre de « mode ».
+// Code C
+switch (mode)
+{
+  case STRING:
+    return strcmp(obj1,obj2);
+  case ISTRING:
+    return stricmp(objt1,objt2);
+  …
+}
+L'invocation s'effectue en fournissant le mode à appliquer.
+sort(container, ISTRING)
+Si l'utilisateur désire un tri tenant compte de la langue de l'utilisateur il n'est plus possible de se servir de la même fonction. En dehors des différents modes proposés, il n'est pas possible d'adapter l'algorithme. Pour corriger cela, il est envisageable de transformer le paramètre de mode pour un pointeur de fonction.
+void sort(container* container,
+  int (*compare)(const void* obj1,const void* obj2));
+Il est alors possible de livrer une fonction ayant en charge de comparer deux objets.
+int compare_str(const void* obj1,const void* objt2)
+{
+  return strcmp((char*)obj1,(char*)obj2);
+}
+En rédigeant plusieurs versions de la fonction de comparaison, l'algorithme de tri devient plus souple.
+int compare_istr(const void* obj1,const void* obj2)
+{
+  return stricmp((char*)obj1,(char*)obj2);
+}
+Coomment faire si la comparaison doit elle même être adaptée suivant un paramètre, la langue par exemple ? La première approche consiste à déclarer un paramètre global. Ainsi, les fonctions de comparaisons peuvent s'radapter. Cela n'est pas compatible avec le multi-tâches. Cela impose d'avoir une langue unique pour toute l'application. Pour éviter cela, une première idée consiste à ajouter un paramètre opaque à la fonction de tri.
+void sort(container* container,
+  int (*compare)(const void* obj1,const void* obj2, const void* param),
+  const void* param);
+Les fonctions de tri peuvent alors recevoir un paramètre et réagir suivant sa valeur.
+int compare_str(const void* obj1,const void* obj2,const void* param)
+{
+  if (*(bool*)param)
+    return stricmp((char*)obj1,(char*)obj2);
+  else
+    return strcmp((char*)obj1,(char*)obj2);
+}
+...
+bool mode=true;
+sort(cont,compare_str,&mode);
+Le paramètre opaque peut servir à adapter le comportement de la fonction, mais également à accumuler des résultats. Par exemple, une méthode de type « for each » peut utiliser le paramètre opaque pour calculer la somme des éléments.
+En C++ et en Java, il est possible de faire autrement, d'utiliser des objets pour remplacer cette mécanique. Pour cela, un objet technique est créé à cet effet. Il va posséder le traitement de comparaison et également les paramètres lui permettant d'adapter son traitement. Une classe est utilisée pour représenter un traitement et non pour représenter une structure de données. Cette classe est souvent appelée « functor ».
+// code C++
+class multiply
+{
+  public:
+  int operator()(int x,int y) const
+  {
+    return x*y;
+  }
+};
+
+
+int main()
+{
+  int x[5]={1,2,3,5,8,13};
+  vector<int> v(x,x+6);
+  int product= accumulate(v.begin(),v.end(),1,multiply());
+}
+La classe multiply est un functor. Lors de l'invocation de la fonction accumulate() des Standards Template Library (STL), une instance multiply() est créée pour indiquer le traitement à effectuer lors de la consultation de chaque valeur. Cette méthode impose que l'objet reçu en paramètre propose un opérateur parenthèse. En l'occurrence, la classe multiply propose un opérateur prenthèse acceptant deux entiers. La fonction accumulate() va initialiser un objet int avec la valeur 1, passé dans le troisième paramètre, puis invoquer l'instance multiply avec la valeur courante de l'accumulateur et le prochain objet du conteneur. En pseudo code, le traitement est similaire à ceci :
+{
+  int accumulator=1;
+  for each()
+  {
+    accumulator=multiply(accumulator,current);
+  }
+  return accumulator;
+}
+Smalltalk en son temps, à également proposé l'équivalent des functors, à l'aide des objets blocs. C'est d'ailleurs le seul moyen de rédiger un traitement. Il s'agit d'objets portant un traitement. Une syntaxe particulière à l'aide de crochets, permet d'écrire des méthodes.
+Le Javascript propose l'objet function() qui propose également une approche similaire.
+En java, les choses sont un peu plus complexes, car il est indispensable de définir une interface. Pour proposer une fonction accumulator() en Java, similaire à celle proposé par les STL du C++, il faut proposer une interface indiquant la signature de la méthode qui sera invoquée par la fonction.
+// Code Java
+interface AccumulatorFunctor
+{
+  Integer accumulator(Integer x,Integer y);
+}
+La fonction peut alors être proposée. Elle utilise une approche différente. Nous utilisons un itérateur de début et une taille.
+public static int accumultate(Iterator<Integer> begin,
+  int size,
+  Integer start,
+  AccumulatorFunctor functor)
+{
+  Integer accumulator=start;
+  for (int i=0;i<size;++i)
+    accumulator=functor.acumulate(acculator, begin.next());
+  return accumulator;
+}
+Comme en C++, pour invoquer la fonction, il faut proposer une implémentation du functor.
+class Multiply implements AccumulatorFunctor
+{
+  public Integer accumulate(Integer x, Integer y)
+  {
+    return x*y;
+  }
+}
+Notez la conversion automatique, permettant une multiplication directe à partir d'instances Integer. La méthode accumulate() ne s'occupe pas d'extraire les valeurs des Integer ou de convertir le résultat en instance Integer. Nous pouvons alors invoquer la fonction en lui fournissant une instance de Multiply.
+accumulate(vec.iterator(),
+  vec.size(),
+  new Integer(1),
+  new Multiply());
+Nous avons dû créer une classe Multiply uniquement pour une seule invocation. Java propose une syntaxe particulière, permettant de créer des classes anonymes. Cela permet d'éviter la création d'une classe implémentant l'interface AccumulatorFunctor, puis de l'instancier lors de l'invocation de fonction. Il s'agit des inners-classes anonymes (cf. www.prados.fr)
+accumulate(vec.iterator(),
+  vec.size(),
+  new Integer(1),
+  new AccumulatorFunction()
+  {
+    public Integer accumulate(Integer x,Integer y)
+    {
+      return x*y;
+    }
+  });
+Avec cette invocation, une classe implémentant l'interface AccumulatorFunctor est créée automatiquement lors de l'invocation de la méthode. Notre version n'est pas aussi souple que la version C++. En effet, elle est figée pour le type Integer. Comment proposer un service d'accumulation acceptant tous les types d'objets ? Utilisons les capacités du JDK5. Contrairement au C++, nous sommes contrains de créer une classe paramétrable. Celle-ci portera le traitement d'accumulation et l'interface du fonctor. Elle est paramétrée par le type T.
+  
+
+public class Accumulator<T>
+{
+  interface AccumulatorFunctor<T>
+  {
+    T accumulate(T x, T y);
+  }
+  public T accumulate(Iterator<T> begin,
+    int size,
+    T start,
+    Functor<T> functor)
+  {
+    T accumulator = start;
+    for (int i=0;i<size;++i)
+      accumulator=functor.accumulate(acculator,begin.next());
+    return accumulator;
+  }
+}
+Le type T est un type générique, permettant d'adapter l'algorithme à différents types d'objets. L'interface Accumulator<T>.AccumulatorFunctor<T> est l'interface du functor. La méthode accumulate() est alors capable de manipuler des conteneurs de tous types, à condition que le functor livré en paramètre soit compatible. Pour invoquer cette version, le code peut ressembler à ceci :
+new Accumulator<Integer>().accumulate(vec.iterator(),
+  vec.size(), 1,
+  new Accumulator.AccumulatorFunctor<Integer>()
+  {
+    public Integer accumulate(Integer x,Integer y)
+    {
+      return x*y;
+    }
+  });
+Il faut construire une instance de type Accumulator (le new), avec un type particulier, en l'occurence Integer, puis invoquer la méthode accumulate(). Le dernier paramètre est une implémentation anonyme du functor, permettant de multiplier les éléments. Il est alors possible d'utiliser le même objet pour accumuler des conteneurs de Double par exemple.
+new Accumulator<Double>().accumulate(vecdbl.iterator(),
+  vecdbl.size(),1.0,
+  new Accumulator.AccumulatorFunctor<Double>()
+  {
+    public Double accumulate(Double x, Double y)
+    {
+      return x*y;
+    }
+  });
+Nous avons utilisé une technique permettant de paramétrer un algorithme : les functors. Nous avons regardé comment s'en passer en C, comment cela est utilisé en C++ dans les STL, puis nous avons essayé de proposer la même chose en Java. Nous avons utilisé une syntaxe particulière, les inner-classes anonymes, pour répondre à ce besoin. Puis, pour parfaire notre algorithme, nous avons utilisé les capacités du JDK5 afin de s'affranchir du type des éléments manipulés dans le conteneur.
