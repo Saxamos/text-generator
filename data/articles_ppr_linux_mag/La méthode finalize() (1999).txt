@@ -22,7 +22,7 @@ TempFile tmp=new TempFile();
 tmp=null; // Va détruire le fichier
 Le ramasse-miettes intervient en tâche de fond. Il n'est pas possible de prédire quand la méthode finalize() sera appelée. Cela veut dire que la ressource file.tmp ne sera pas disponible tant que le ramasse-miettes n'est pas intervenu. Pour demander explicitement le nettoyage de la mémoire, il faut appeler la méthode System.gc(). Cette méthode lance en tâche de fond le ramasse-miettes. La méthode System.runFinalization() lance le ramasse-miettes et attend que toutes les méthodes finalize() soient effectuées avant de rendre la main.
 Lorsqu'un programme se termine, les méthodes finalize() ne sont pas forcément appelées. Pour garantir l'appel aux méthodes finalize() avant la fin du programme, il faut appeler System.runFinalizationOnExit()avec la valeur true. Ce paramétrage permet d'imposer l'appel de toutes les méthodes finalize() de toutes les instances, avant de sortir du programme. Cela permet de garantir que le fichier temporaire précédent sera détruit.
-Îlot
+Ilot
 Une instance peut être référencée par une autre instance, tout en étant candidate pour le ramasse-miettes. Si deux instances se référencent mutuellement, mais qu'aucune autre instance les références, il y a un îlot non rattaché aux différentes tâches.
   
 

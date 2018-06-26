@@ -190,7 +190,7 @@ public class SyncHTTPService extends Service
  }
 }
 Dans le AndroidManifest.xml, on le déclare.
-<!-- Provider to expose the cached pages →
+<!-- Provider to expose the cached pages
 <provider
  android:name=".SyncHTTPService$CacheHTTPContentProvider"
  android:authorities="fr.prados.webkitcache"

@@ -1,7 +1,4 @@
 import os
-import re
-
-from unidecode import unidecode
 
 
 def sanitize_input_text(input_text_path):
@@ -12,8 +9,8 @@ def sanitize_input_text(input_text_path):
     for filename in os.listdir(input_text_path):
         with open(input_text_path + '/' + filename) as input_text:
             for line in input_text:
-                new_line = _sanitize(line)
-                training_data.append(new_line)
+                # line = unidecode(line.lower())
+                training_data.append(line)
     training_data = '\n\n'.join(training_data)
     print('*******************************')
     print('Input text sanitized !')
@@ -27,8 +24,3 @@ def sanitize_input_text(input_text_path):
     print('Cardinal of character set : {}'.format(len(character_list_in_training_data)))
     print('*******************************')
     return training_data, character_list_in_training_data
-
-
-def _sanitize(line):
-    lowered_text = unidecode(line.lower())
-    return re.sub(' ;', ',', lowered_text)

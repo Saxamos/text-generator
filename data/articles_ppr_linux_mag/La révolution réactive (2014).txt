@@ -49,7 +49,7 @@ Mais pourquoi fonctionner comme cela ? Pour plusieurs raisons :
 * Améliorer les performances en augmentant le parallélisme
 * Mieux gérer les pics de charges en supprimant la limite arbitraire du nombre de traitements simultanés
 * Mieux exploiter la multiplication du nombre de cœurs dans les CPU
-* Être capable de gérer des flux de traitements (en plus des requêtes/réponses habituelles)
+* Etre capable de gérer des flux de traitements (en plus des requêtes/réponses habituelles)
 * Réduire la consommation mémoire
 Ces améliorations permettent de densifier le nombre d’utilisateurs par serveur. Dans les mêmes proportions, cela réduit le coût du Cloud.
 Au niveau technique, cela entraîne :

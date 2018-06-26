@@ -242,7 +242,7 @@ Celui-ci est communiqué à l'application à l'aide d'un message broadcast. Comm
     android:protectionLevel="signature"
     />
 et utilisée dans les applications utilisant C2DM.
-<!-- Utilise la permission de recevoir des messages depuis C2DM →
+<!-- Utilise la permission de recevoir des messages depuis C2DM
 <uses-permission android:name="fr.prados.android.c2dm.permission.RECEIVE"/>
 Inversement, pour être certain que l'acquittement de l'enregistrement vient bien du service C2DM, il faut ajouter une contrainte de sécurité pour le receveur de messages broadcast.
 <receiver

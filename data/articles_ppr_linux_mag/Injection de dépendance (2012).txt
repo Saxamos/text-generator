@@ -2,7 +2,7 @@
   
 
 L'injection de dépendances est un patron d'architecture utilisé pour résoudre la problématique des dépendances entre objets tout en permettant un découplage des objets liés, en passant par une indirection. C'est une alternative plus souple à d'autres patrons d'architecture tels que ServiceLocator ou Factory.
-Par Raphaël Semeteys et Philippe PRADOS - 2012
+Par Raphael Semeteys et Philippe PRADOS - 2012
 www.prados.fr
 En 2009 des API ont été spécifiées pour standardiser la notion d'injection de dépendances au niveau de Java (JSR-330) et de la plate-forme JavaEE (JSR-299).
 Principes fondamentaux

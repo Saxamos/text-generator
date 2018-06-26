@@ -6,9 +6,9 @@ from keras.models import Sequential, load_model
 def generate_model(sequence_length, number_of_unique_character):
     model = Sequential()
     model.add(LSTM(256, input_shape=(sequence_length, number_of_unique_character), return_sequences=True))
-    model.add(Dropout(0.2))
+    model.add(Dropout(0.4))
     model.add(LSTM(256))
-    model.add(Dropout(0.2))
+    model.add(Dropout(0.4))
     model.add(Dense(number_of_unique_character))
     model.add(Activation('softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='adam')

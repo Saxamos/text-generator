@@ -1856,5 +1856,3 @@ Les traductions proposées n’ont jamais été codées pour le moment. Peut-êt
 Il faut maintenant trouver un laboratoire acceptant de financer ce projet. Si vous connaissez une entreprise ou une université intéressée, contactez-moi  !
 Dans l'immédiat, pour améliorer la qualité de vos programmes, il est nécessaire de documenter chaque pointeur pour signaler si celui-ci est une relation ou une agrégation. De même, les commentaires des paramètres d'une méthode doivent indiquer si la méthode utilisera, adoptera ou dupliquera le paramètre.
 
-
-☺

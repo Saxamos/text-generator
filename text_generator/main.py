@@ -5,25 +5,24 @@ from text_generator.neural_network import neural_network
 from text_generator.predictor import predictor
 from text_generator.text_sanitizer import text_sanitizer
 
-INPUT_TEXT_PATH = 'data/articles_ppr_linux_mag'
-SEQUENCE_LENGTH = 50
-NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES = 3
 MODEL_PATH = 'models/weights-improvement-{}.hdf5'
-EPOCH_NUMBER = 2
-BATCH_SIZE = 64
-TEXT_STARTER = 'les algorithmes a haute frequence cherchent a expl'
-PREDICTION_LENGTH = 200
+TEXT_STARTER = 'Java propose un mécanisme de sécurité très fin, permettant de contrôler l’accès à toutes les ressour'
 
 
 @click.command()
-@click.option('--input-text-path', default=INPUT_TEXT_PATH, help='Path of the input training text.')
-@click.option('--sequence-length', default=SEQUENCE_LENGTH, help='Length of the input sequences given to the RNN.')
-@click.option('--number-of-character-between-sequences', default=NUMBER_OF_CHARACTER_BETWEEN_SEQUENCES)
-@click.option('--number-of-epoch', default=EPOCH_NUMBER, help='Number of iteration for the training part.')
-@click.option('--batch-size', default=BATCH_SIZE, help='Number of sequence by batch.')
+@click.option('--input-text-path', default='data/sub_articles_ppr_linux_mag', type=click.Path(),
+              help='Path of the input training text.')
+@click.option('--sequence-length', default=100, help='Length of the input sequences given to the RNN.')
+@click.option('--number-of-character-between-sequences', default=3)
+@click.option('--number-of-epoch', default=50, help='Number of iteration for the training part.')
+@click.option('--batch-size', default=100, help='Number of sequences by batch.')
 @click.option('--text-starter', default=TEXT_STARTER, help='Beginning of the sentence to be predicted.')
-@click.option('--prediction-length', default=PREDICTION_LENGTH, help='Length of the desired text to predict.')
+@click.option('--prediction-length', default=1500, help='Length of the desired text to predict.')
+@click.option('--temperature', default=0.3, help='A low temperature will give something conservative. With a high '
+                                                 'temperature the predictions will be more original, but with'
+                                                 ' possibly more mistakes')
 def main(**kwargs):
+
     training_data, character_list_in_training_data = text_sanitizer.sanitize_input_text(kwargs['input_text_path'])
 
     x_train_sequences, y_train_sequences = pre_processor.prepare_training_data(
@@ -53,7 +52,8 @@ def main(**kwargs):
         model,
         kwargs['text_starter'],
         kwargs['prediction_length'],
-        character_list_in_training_data
+        character_list_in_training_data,
+        kwargs['temperature']
     )
     click.echo(click.style(prediction, blink=True, bold=True, fg='red'))
 
@@ -61,12 +61,10 @@ def main(**kwargs):
 main()
 
 # TODO: path de click
-# TODO: test main click + test main mocké
-# TODO: lien entre sequence size et text starter + plains d'autres règles métiers à implém
-# TODO: problème à la lecture du model
+# TODO: lien entre sequence size et text starter
 # TODO: faire un logger
-# TODO: faire tourner sur gpu https://www.floydhub.com/ + evaluation du modèle
 # TODO: TU on NN : https://medium.com/@keeper6928/how-to-unit-test-machine-learning-code-57cf6fd81765
 # TODO: CE continuous evaluation : https://medium.com/@rstojnic/continuous-integration-for-machine-learning-6893aa867002
 # TODO: générer un fichier audio avec google api ?
-# TODO: slides R&D : https://docs.google.com/presentation/d/1YgxDk1NiClvcqnynwvw1Rw9wMFWzhkzvgKCiif5nZRs/edit#slide=id.g3874863166_0_30
+# TODO: reprendre les tests + faire IDD
+# TODO: essayer avec majuscules + paramètres de karpathy (dropout & seq length)

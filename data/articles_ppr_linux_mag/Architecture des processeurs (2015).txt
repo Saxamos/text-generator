@@ -45,7 +45,6 @@ Niveau de cache
 	Géré par
 	Registre
 	1/2 KB
-	µ
 	virtual core
 	Custom CMOS
 	Compilateur

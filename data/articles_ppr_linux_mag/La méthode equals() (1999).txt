@@ -25,8 +25,8 @@ En fait, il existe deux stratégies de comparaison.
 * Comparer deux instances c'est comparer l'union des attributs de chaque instance. Si l'une d'elles ne possède pas un des attributs à comparer, l'égalité n'est pas résolue. Cette approche est appelée : rigide.
 * Ou bien, comparer deux instances de types différents peut consister à comparer uniquement l'intersection des attributs de chaque instance. Cette approche est appelée : souple.
 Par exemple, la classe Personne possède les attributs nom_ et prenom_. La classe Employé possède un attribut supplémentaire, le salaire_. Un Sportif possède un attribut sport_. Si on désire comparer un Employé et un Sportif, il y a deux approches possibles.
-* Approche rigide : Employé ∪ Sportif = [nom_, prenom_, salaire_, sport_]. Si l'un de ces attributs n'est pas présent dans l'une des deux instances, la méthode equals() retourne false.
-* Approche souple : Employé ∩ Sportif = [nom_, prenom_]. Si ces deux attributs sont identiques, la méthode equals() retourne true.
+* Approche rigide : Employé u Sportif = [nom_, prenom_, salaire_, sport_]. Si l'un de ces attributs n'est pas présent dans l'une des deux instances, la méthode equals() retourne false.
+* Approche souple : Employé n Sportif = [nom_, prenom_]. Si ces deux attributs sont identiques, la méthode equals() retourne true.
 Il faut être capable de proposer l'approche rigide ou souple pour la méthode equals().
 Approche rigide
   

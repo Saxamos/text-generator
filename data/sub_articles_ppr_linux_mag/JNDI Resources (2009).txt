@@ -1,0 +1,603 @@
+﻿JNDI Resources
+  
+
+Suite à la session que j'ai présentée au salon Solutions Linux de 2008, j'ai évoqué des travaux pour normaliser le déploiement des composants JEE, indépendamment des serveurs d'applications, de leurs versions, de l'architecture mise en place, etc. Cette article reprend les idées exposées et propose un utilitaire Open Source pour apporter des solutions. Le principe de Java « Écrit une fois, exécuté partout » est insuffisant. Nous proposons d'ajouter « Écrit une fois, installé partout ».
+Par Philippe PRADOS - 2009
+www.prados.fr
+Les serveurs d'applications savent publier des composants normalisés de type Web (Archive WAR), des composants d'entreprises (Archive EAR) ou d'autres plus ou moins riches. Ces normes de packagings ont été conçues avec un seul objectif : permettre l'installation d'un composant, quels que soit le serveur d'applications, l'architecture, le contexte d'exécution. Il doit également être possible d'installer plusieurs composant dans le même serveur, sans qu'il y ait de conflits. En effet, à quoi sert de normaliser le packaging si ce dernier doit être spécialisé pour chaque serveur d'applications ? Si un serveur impose ses propres contraintes et normes de déploiements, la « norme » de packaging ne sert plus à rien.  
+Les composants ne doivent pas être adhérents à une plate-forme ou à un serveur particulier. En effet, comment réorganiser la plate-forme d'exécution s'il faut pour cela recompiler tous les composants ? Comment ajouter un nouveau nœud à un cluster ? Comment déplacer la base de données sans revoir tous les paramètres ?
+Pour séparer le composant des ressources dont il a besoin, les spécifications JEE proposent d'utiliser un annuaire accessible par l'API JNDI (Java Naming and Directory Interface). Le serveur d'applications doit publier tous types de ressources dans un annuaire (sources de données, files JMS, URLs, noms de hosts, etc.). Les composants peuvent alors le consulter pour découvrir dynamiquement l'environnement d'exécution (Cf. Illustration 1). Cela contribue au principe « Écrit une fois, exécuté partout ».
+En toute rigueur, afin de bénéficier de tous les avantages ayant justifiés la conception des spécifications des composants JEE, chaque composant doit être indépendant du serveur d'applications et ne posséder aucun paramètre de déploiement. Pour rappel, un paramètre de déploiement est un paramètre dont la valeur évolue suivant le contexte d'exécution (répertoire, nom de host, adresse IP, etc.)
+État des lieux
+Généralement, les composants utilisent un fichier de propriétés pour porter les paramètres de déploiement. Tout simplement parce que les développeurs ne maîtrisent pas les spécifications JEE et se contentent de quelques lignes de code pour récupérer un paramètre.
+InetAddress host=InetAddress.getByName(prop.getProperty("host"));
+Lorsque l'on souhaite intégrer l'application, se pose alors la question de la localisation du fichier de propriétés. La première approche consiste à le placer dans le composant. Connaissant les valeurs de tous les paramètres avant l'installation, les développeurs construisent un composant spécifique ne pouvant s'installer que sur un seul serveur, sur une machine particulière dans un environnement figé.
+L'avantage de cette approche est qu'elle permet au développeur de ne pas réfléchir plus de deux secondes à l'impact de son développement. Les inconvénients sont nombreux :
+* adhérence forte entre le développement et le déploiement ;
+* création de plusieurs branches SVN/CVS pour les différents jeux de paramètres ;
+* Impossibilité à l'exploitant de modifier un paramètre de déploiement sans devoir repartir des sources ;
+* Grande difficulté à mutualiser les serveurs d'applications ;
+* Violation du principe « Écrit une fois, exécuté partout ».
+Peut-on imaginer que Microsoft doivent recompiler la suite Office à chaque licence ? C'est pourtant cette démarche qui est appliquée aux composants JEE.
+L'étape d'après consiste a externaliser le fichier de propriétés du composant. Le fichier n'est plus présent dans le composant, mais installé dans un répertoire particulier. Il est récupéré par le composant qui doit savoir précisément où le chercher. Le composant est relativement indépendant du serveur d'exécution (au nom du répertoire près) mais l'installation du fichier de propriétés ne respecte plus les standards JEE. Il faut l'installer « à la main » ainsi que le paramétrage des ressources dans le serveur d'applications.
+Parfois, un lien symbolique permet de déplacer artificiellement le fichier vers une autre localisation. Mais, comme cela présente un risque de sécurité, il faut ajouter un paramètre au contexte d'exécution de Tomcat, permettant d'accepter cela (allowLinking="true").
+Parfois, le fichier de propriété est placé dans un répertoire accessible par le chargeur de classes du serveur d'applications. Ainsi, le composant n'a pas à connaître le nom du répertoire. Il récupère les propriétés via les méthodes getResource(). Mais dans ce cas, il y des risques de collisions si plusieurs composants sont installés dans le même serveur d'applications. Il n'est plus possible de mutualiser le serveur d'applications.
+Comme il existe d'autres paramètres de déploiement qui ne sont pas présents dans le fichier de propriétés (les sources de données, les files JMS, les paramètres de connexion au serveur SMTP, etc.) il faut également paramétrer le serveur d'applications avant l'installation du composant. Les stratégies sont mixes. Une partie des paramètres de déploiement est présente dans un fichier de propriétés, une autre partie est exposée dans l'annuaire JNDI.
+On retrouve parfois un mélange particulièrement exotique des deux approches. Par exemple, le fichier de propriétés possède un paramètre pour localiser l'annuaire JNDI où est déclaré une file JMS :
+String url=prop.getProperty("provider.url");
+Properties env = new Properties( );
+env.put(Context.INITIAL_CONTEXT_FACTORY, 
+  "weblogic.jndi.WLInitialContextFactory");
+env.put(Context.PROVIDER_URL, url);
+InitialContext jndi = new InitialContext(env);
+cf=(ConnectionFactory)jndi.lookup("/jms/CF");
+Pour communiquer avec l'annuaire référençant la file JMS, le code indique le nom du driver pour le Context Factory. Il n'est plus possible de publier la file JMS sur un autre annuaire. Impossible de porter le composant d'un WebLogic à un WebSphere ou un Jboss. De plus, si le nom du driver est présent dans le code, pourquoi ne pas directement communiquer avec la file JMS ? L'annuaire ne sert à rien dans ce cas.
+C'est comme aller chez M. Dupont et sonner à sa porte ; lui demander son répertoire téléphonique ; trouver le numéro de téléphone de M. Dupont et finalement, l'appeler pour lui demander son adresse !
+L'étape suivante consiste à rédiger un script qui se charge d'installer le composant, les différents drivers et le fichier de propriétés. Puis de paramétrer le serveur d'applications pour qu'il publie les ressources. Ce script doit être paramétré suivant la localisation physique du serveur et du composant (mot de passe à utiliser, adresse IP de la base de données, e-mail pour la communication avec les clients, etc.). Le script est alors très adhérent au serveur d'applications.
+Il devient très difficile de faire migrer le composant d'un serveur à un autre, voir de faire évoluer l'architecture, car le script possède une adhérence très forte avec le contexte d'exécution. Il n'est plus possible de mutualiser le serveur d'applications. Chaque serveur ne publie qu'une seule application. Le 's' de serveur d'applications peut alors disparaître. La mutualisation étant impossible, l'impact écologique est important et « c'est pas bien » ;-)
+Les « usages » de la profession n'intègrent pas les contraintes de déploiement. Tous les paramètres sont mélangés : les paramètres de déploiement, les paramètres métiers, les paramètres de frameworks, etc. Pourtant, il existe une technologie pour gérer correctement les paramètres de déploiement : JNDI.
+Sans maîtrise de cette technologie, il est illusoire d'envisager une mutualisation des ressources et une installation normalisée et automatique. Comme je le signalait déjà en 2003 dans Linux Mag n°53, tous les paramètres de déploiement doivent être présent dans l'annuaire JNDI.
+Les besoins
+Les spécifications JEE proposent trois rôles distincts : le créateur de composants (WAR, EJB-JAR, etc.), l'assembleur de composants (il doit décrire comment les composants communiquent entre-eux, comment ils sont déployés et génère l'EAR) et l'installateur d'applications (il doit indiquer les choix de déploiements physiques, fournir les mots de passes, etc.).
+Le créateur de composants ne doit pas savoir comment sont initialisées les ressources ou si le composant partage le serveur d'applications avec un autre composant. Il ne doit pas connaître la version exacte du serveur d'applications ou s'il s'agit d'un serveur JBoss, Tomcat ou autre (c'est l'objectif des fichiers WAR/EAR !).
+L'assembleur de composants doit décrire les exigences de l'application en termes de ressources (type de Datasource, nombre de threads, taille des pools de connexions, etc.).
+L'installateur ne doit rien connaître d'autre que les paramètres de déploiement. Il doit pouvoir réorganiser sa plate-forme pour la mutualiser au maximum. Il doit pouvoir migrer vers une architecture utilisant un annuaire JNDI centralisé s'il le juge nécessaire.
+Pour mutualiser les ressources et réduire l'impact écologique des salles machines, il y a trois niveaux possibles : au sein du serveur d'applications, sur le même nœud à l'aide de plusieurs instances de serveurs d'applications ou sur le même nœud à l'aide de machines virtuelles type VMWare ou Xen.
+Comment permettre toutes ces possibilités lors de la rédaction d'un composant ? Par une certaine rigueur dans le développement, par la prise en compte des contraintes de déploiement dans le développement et par le respect strict des spécifications JEE. La règle est simple : tous les paramètres de déploiement doivent être dans l'annuaire JNDI. Cette règle permet le respect du principe « Écrit une fois, exécuté partout », si chère à Java.
+Il doit être possible d'adapter la plate-forme d'exécution à des évolutions de la charge, par l'ajout d'un cluster là où un seul nœud était suffisant ; par le regroupement d'applications lors de l'achat de machines plus puissantes, etc. Potentiellement, dans un doux rêve, il faut pouvoir faire du capacity planning (de la redistribution des ressources dans le temps).
+JNDI et les ressources
+JNDI est la technologie JEE permettant de traiter le déploiement. C'est une API permettant de communiquer avec un référentiel arborescent d'objets. Chaque composant JEE peut y trouver les ressources dont il a besoin (DataSource, JMS, URL, Mail, Host, etc.). Le composant n'a pas à connaître le driver utilisé, sa version, ni la marque du fournisseur de la ressource. Tous les drivers standards de Java sont publiables dans un arbre JNDI (JDBC, JMS, JNDI, JCA, etc.). Conformément aux spécifications JEE, ils doivent être publiés dans l'arbre JNDI (Illustration 1: Déploiement JEE). Sinon les normes des drivers ne servent à rien ! En effet, à quoi sert de normer l'API JDBC si chaque composant doit communiquer spécifiquement avec une version de driver, en utilisant le nom de la classe , des API spécifiques, etc. ?
+
+
+  
+
+Les spécifications JEE ne normalisent pas la publication des ressources dans l'annuaire JNDI. Chaque serveur est libre d'utiliser l'approche qu'il souhaite. Les versions commerciales proposent généralement une interface utilisateur pour cela. Les versions Open Source se contentent de fichiers XML à rédiger et à placer dans les bons répertoires. La documentation correspondante est souvent complexe, illisible, incomplète ou erronée. (J'ai trouvé plusieurs bugs dans JBoss en systématisant la publication de ressources dans différentes architectures. Les correctifs que j'ai soumis sont publiés ou le seront bientôt).
+La publication des ressources n'étant pas normalisée, il est difficile d'installer un même composant sur différents serveurs d'applications, de marques ou de versions différentes. Chaque script d'installation doit être spécialisé à un serveur et une version particulière. Cela oblige à une adhérence à un serveur, ce qui n'est pas sans attrait commercial pour les fournisseurs de solutions.
+Rappel sur JNDI
+Les composants JEE doivent récupérer les objets dépendant du contexte d'exécution, à l'aide de clefs et d'un annuaire JNDI. Les clefs suivent des conventions, permettant une organisation des différentes ressources et un partage du serveur d'applications.
+Chaque composant ne peut, théoriquement, manipuler que des clefs de la branche java:comp. C'est une branche publiant des objets n'étant visibles que par le composant. Plus précisément, les objets sont généralement récupérés de la branche java:comp/env qui est une branche spécifique à chaque thread. Cela correspond à chaque sous-composant (EJB-JAR ou WAR) dans un composant (EAR). Par exemple, plusieurs archives WAR peuvent être présentes dans le même composant EAR. Chaque WAR peut avoir des valeurs différentes pour les mêmes clefs de la branche java:comp/env. En pratique, cela n'arrive jamais.
+La branche java: est une branche spéciale, où les objets ne sont visibles que par la JVM. Ils ne sont pas publiés à l'extérieur. Cela permet d'avoir des paramètres locaux à une JVM, sans les exposer à d'autres JVM.
+La branche racine est visible par tous. Les objets présents dans cette branche peuvent être récupérés par tous code java et même à distance via RMI ou IIOP.
+Le tableau suivant résume ces différents branches.
+Branche
+	Visibilité
+	/
+	Visible par tous.
+	java:
+	Visible par la JVM.
+	java:comp
+	Visible par chaque composant (EAR, WAR, etc.).
+	java:comp/env
+	Visible par chaque thread (par chaque sous-composant).
+	Pour mémoire, le tableau suivant reprend les conventions JEE.
+Clef JNDI
+	Type
+	Exemple
+	java:comp/env/ejb/*
+	javax.ejb.EJBObject
+	Les EJBs s'il y en a.
+	java:comp/env/jdbc/*
+	javax.sql.DataSource
+	Une source de données SQL avec nom d'utilisateur et mot de passe.
+	java:comp/env/jms/*
+	javax.jms.ConnectionFactory
+javax.jms.XAConnectionFactory
+javax.jms.Queue
+javax.jms.Topic
+	Une source de queue JMS avec nom d'utilisateur et mot de passe.
+	java:comp/env/mail/*
+	javax.mail.Session
+javax.mail.Address
+javax.mail.internet.InternetAddress
+	Un serveur SMTP, IMAP4 ou POP3 ;
+Une adresse courriel.
+	java:comp/env/url/*
+	java.net.URL
+	Un répertoire partagé ;Une branche FTP ;
+Une requête de PING vers un serveur HTTP.
+	java:comp/env/services/*
+	avax.xml.ws.Service
+	Une référence à un service Web.
+	java:comp/env/eis/*
+	avax.resource.cci.ConnectionFactory
+avax.resource.Referenceable
+	Pour les ressources JCA.
+	java:comp/UserTransaction
+	javax.transaction.UserTransaction
+	Clef spéciale permettant d'avoir un accès au contexte transactionnel.
+	Plusieurs architectures sont possibles, d'un annuaire localisé dans chaque serveur d'applications à une grappe d'annuaires, utilisé par tous les serveurs d'applications de l'entreprise.
+
+
+  
+
+Lors de l'installation d'un composant simple, il est possible de publier dans le même serveur : les ressources et le composant. Mais, il faut pouvoir installer plusieurs composants dans le même serveur, sans chevauchement des ressources. Cela justifie la présence des espaces de nommage java:comp. Ainsi, chaque composant a un espace qui lui est propre.
+Lors de l'installation d'un composant dans un cluster, soit chaque ressource est publiée individuellement dans chaque serveur d'applications des membres du cluster (approche duplication de l'annuaire), soit un serveur JNDI centralisé publie les ressources, et chaque membre du cluster les récupère (approche centralisée, voir Illustration 3). La deuxième approche garantit une uniformité des paramètres. Une modification d'un paramètre a un impact immédiat sur tous les membres du cluster. Il faut pouvoir passer d'une architecture à l'autre, sans faire intervenir le développement.
+
+
+  
+
+Utiliser les ressources JNDI
+Les composants doivent indiquer les ressources dont ils ont besoin : une source de données, une queue JMS, etc. Le serveur d'applications doit être paramétré pour offrir les ressources nécessaires aux composants. Les fichiers web.xml et ejb-jar.xml permettent d'indiquer les ressources nécessaires aux composants. Il est possible d'indiquer une clef JNDI locale au composant et une classe Java. Le serveur doit alimenter les clefs de l'annuaire avec des objets répondants aux classes.
+<web-app id="mon-application">
+  ...
+  <resource-ref >
+      <description>Mon host à contacter</description>
+      <res-ref-name>MonHostAContacter</res-ref-name>
+      <res-type>java.net.InetAddress</res-type>
+      <res-auth>Application</res-auth>
+  </resource-ref>
+  ...
+</web-app>
+Cet extrait d'un fichier web.xml indique que le composant souhaite trouver dans l'annuaire du serveur d'applications, à la clef java:comp/env/MonHostAContacter, une instance de type java.net.InetAddress.
+Dans le monde réel, les exigences des projets sont plus complexes. En effet, le composant doit préciser qu'il désire une source de données de type MySQL, un pool de connexions de telle taille, etc. Mais, il n'a pas besoin d'indiquer l'utilisateur et le mot de passe. Ces informations sont du ressort de l'installateur de composants, comme décrit dans les spécifications JEE.
+Pour combler ces lacunes, des fichiers README indiquent généralement comment paramétrer chaque ressource par une intervention manuelle. Ou bien, des scripts d'installations sont proposés, mais limités à certains serveurs ou à certaines architectures. Ils interviennent si profondément, qu'il n'est plus possible d'installer plusieurs composants sur le même serveur.
+Vingt-cinq à quarante pour-cent du temps consacré aux déploiements des composants est consommé à corriger des problèmes de paramètres. Souvent, un serveur fonctionne mais pas l'autre. Où est l'erreur ?
+Alors que les salles informatiques cherchent à rationaliser les ressources (pour des raisons écologiques, financières, surface au sol, limite électrique), il est difficile de le faire, à cause d'une adhérence trop forte entre les composants et les serveurs d'applications.
+Mapping des clefs locales
+Pour initialiser les objets de la branche java:comp/env, le serveur d'applications doit proposer un paramétrage spécifique. Cela explique pourquoi il existe différents fichiers complémentaires comme jboss-web.xml de JBoss RedHat, context.xml d'Apache Tomcat , ibm-web-bnd.xmi pour WebSphere d'IBM, etc.
+En l'absence des ces fichiers, les serveurs demandent généralement la résolution de ces références lors de l'installation (cas de IBM WebSphere par exemple).
+JBoss impose un mapping entre une clef locale au composant (java:comp/env) et une clef globale (java:... ou /... ).
+Ces fichiers spécifiques ayant des noms distincts, un composant peut posséder simultanément un fichier pour JBoss, un autre pour Tomcat, un troisième pour WebSphere, etc.
+Pour éviter les collisions entres plusieurs composants, une approche consiste à mapper toutes les clefs des composants sur des clefs d'un niveau supérieur, en ajoutant un préfixe spécifique.
+java:comp/env/jdbc/MaDataSource -> java:MonComposant/jdbc/MaDataSource
+Ce mapping peut être automatisé à l'aide de feuilles XSLT et des fichiers web.xml et ejb-jar.xml.
+JNDI offrant la possibilité d'avoir des liens entre les clefs de l'annuaire (comme les liens des systèmes de fichiers), il est possible d'avoir un mapping en cascade (Illustration 4).
+java:comp/env/jdbc/MaDataSource -> java:MonComposant/jdbc/MaDataSource
+java:MonComposant/jdbc/MaDataSource -> /MonComposant/jdbc/MaDataSource
+
+
+
+
+  
+
+La résolution des liens entres clefs JNDI est transparente pour l'application.
+new InitialContext().lookup("java:comp/env/jdbc/MaDataSource")
+Cette approche en cascade permet beaucoup de souplesse dans le déploiement. En effet, il est possible d'utiliser un annuaire centralisé dont les clefs ne seront pas dans la branche java:. Si par contre, il est nécessaire par la suite d'adapter les paramètres pour un nœud particulier d'un cluster, il suffit de déclarer la ressource sous la clef java:/MonComposant/jdbc/.... Il n'est pas nécessaire d'intervenir sur le composant. Soit tous les nœuds du cluster partagent les mêmes paramètres, soit chacun utilise un jeu de paramètres spécifique. Cela, sans intervenir sur le code.
+EJB
+Les EJBs peuvent être invoqués à l'intérieur d'un EAR, via des références locales, ou à distance, via des références externes. Pour cela, chaque EJB s'enregistre dans un annuaire afin d'exposer ses services. Un client de l'EJB doit consulter l'annuaire pour obtenir un proxy permettant d'invoquer l'EJB distant.
+Plusieurs architectures sont possibles. La plus simple consiste à utiliser un annuaire unique, où tous les EJBs s'enregistrent. L'EAR du client des EJBs consulte la branche racine pour trouver l'EJB à invoquer. Pour partager un annuaire avec JBoss, ce n'est pas très compliqué. Suivez le guide présent ici : http://tinyurl.com/42k8ka
+Plus généralement, les développeurs ne maîtrisant pas l'architecture des annuaires JNDI, les EJBs sont enregistrés dans les annuaires locaux à chaque serveur d'applications. Il est alors nécessaire de référencer l'annuaire de la cible pour y trouver l'EJB. La meilleure approche pour faire cela consiste à marier plusieurs annuaires. Par exemple, un serveur d'applications « COMPTA » publie l'EJB « Paye » à la clef JNDI /ejb/Paye. Un serveur d'applications « Intranet » souhaite accéder à l'EJB Paye.
+Dans le code, on retrouve une consultation de l'annuaire JNDI.
+PayeHome home = (PayeHome)PortableRemoteObject.narrow(
+  new InitialContext().lookup("java:comp/env/ejb/Paye"), 
+  PayeHome.class);
+Paye ejb=(Paye)PortableRemoteObject.narrow(home.create(),Paye.class);
+Il faut donc mapper la clef java:comp/env/ejb/Paye sur une autre clef JNDI. Mais, celle-ci est distante et non présente dans l'annuaire du client. Déclarons dans l'annuaire local, à la clef /ServiceCompta, un lien vers l'annuaire de la compta. Cela se fait en paramétrant correctement le serveur d'applications (l'outil Open Source que je vous propose peut s'en charger). C'est équivalent à un montage disque sous Unix. L'annuaire est consultable comme s'il s'agissait d'un seul annuaire. Ainsi, à la clef /ServiceCompta/ejb/Paye référence l'EJB distant.
+En ajoutant un lien de /ejb/Paye vers /ServiceCompta/ejb/Paye, l'application cliente ignore que l'EJB est distant, publié dans un autre annuaire. Publier l'EJB de Paye sur un serveur d'applications différent du composant Intranet, est un choix de déploiement, pas un choix de développement.
+Migration
+Soyons réalistes, les composants ne respectent pas souvent les spécifications JEE, encore moins le principe « Écrit une fois, exécuté partout ». C'est bien dommage. Les composants sont adhérent à la plate-forme d'exécution, à une version d'un driver (cf. l'exemple de Monsieur Dupont ci-dessus).
+Si un composant utilise un fichier de propriétés ou une syntaxe XML regroupant des paramètres de déploiement et des paramètres applicatifs, il faut le faire évoluer pour tenir compte des spécifications JEE. En effet, il est incompatible avec le principe « Écrit une fois, installé partout ». Par exemple, le fichier de propriétés suivant intègre des paramètres fonctionnels et des paramètres de déploiement.
+tva=10.5
+host=monserveur
+La première étape consiste à modifier la valeur de la propriété host par une clef JNDI commençant par java:comp/env.
+tva=10.5
+host=java:comp/env/host/MonHostAContacter
+Il faut ensuite déclarer la clef dans le fichier web.xml ou ejb-jar.xml.
+<web-app id="mon-application">
+  ...
+  <resource-ref >
+      <description>Mon host à contacter</description>
+      <res-ref-name>host/MonHostAContacter</res-ref-name>
+      <res-type>java.net.InetAddress</res-type>
+      <res-auth>Application</res-auth>
+  </resource-ref>
+  ...
+</web-app>
+Il reste à modifier le code exploitant cette information. Par exemple, dans le cas de la lecture d'une propriété pour obtenir le nom d'un host, la ligne suivante :
+InetAddress host=InetAddress.getByName(prop.getProperty("host"));
+doit être modifiée en :
+InetAddress host=new InitialContext().lookup(prop.getProperty("host"));
+Pour garder une compatibilité ascendante, vous pouvez détecter l'évolution.
+String hostname=prop.getProperty("host");
+InetAddress host;
+if (hostname.startWith("java:comp/env")
+{
+    host=new InitialContext().lookup(hostname);
+}
+else
+{
+    log.warn("Deprecated usage of host name in configuration file. Use JNDI key.");
+    host=InetAddress.getByName(hostname);
+}
+La dernière étape consiste à paramétrer le serveur d'applications pour qu'il publie cette ressource. C'est ici qu'intervient l'outil Open Source que je vous propose : jndi-resources.
+Jndi-Resources
+Nous proposons de traiter la publication des ressources JNDI, afin d'améliorer et d'uniformiser les installations des composants, par un paramétrage simplifié des différents serveurs d'applications (Illustration 5: Intégration de jndi-resources).
+Après le principe « Écrit une fois, exécuté partout », nous proposons le principe suivant : « Écrit une fois, installé partout »
+
+
+  
+
+Les bénéfices attendus de la démarche sont les suivants :
+* « Écrit une fois, installé partout »
+* possibilité de mutualiser les ressources au niveau serveurs d'applications, instances de serveurs d'applications ou OS virtuelles ;
+* normalisation de l'installation des composants, quel que soit le serveur d'applications ;
+* indépendance des composants vis-à-vis des serveurs d'applications ;
+* migration immédiate d'un serveur à un autre ou d'une version à la suivante ;
+* normalisation de l'utilisation des ressources de l'entreprise ;
+* qualifications des paramètres de déploiements.
+Où se trouve le maillon faible ? Dans l'absence de spécification pour publier les ressources nécessaires aux composants dans les annuaires JNDI des serveurs d'applications. Nous proposons d'exprimer les besoins en ressources JNDI dans un fichier XML simple. Ce dernier doit servir d'entrée à différents utilitaires en charge de paramétrer les serveurs d'applications en conformité avec les besoins des composants.
+Jndi-resources est un utilitaire permettant d'installer facilement et uniformément des composants JEE sur différents serveurs d'applications. Il permet de combler le maillon manquant des spécifications JEE, entraînant que malgré les efforts de normalisation, les paquetages standards WAR, EAR, etc. ne sont pas utilisables tels quels par les serveurs d'applications. Avec Jndi-resources, un composant standard peut être installé instantanément dans différents serveurs d'applications, en différentes versions et pour différentes architectures. Les ressources nécessaires sont publiées dans l'annuaire spécifique au serveur d'applications ou dans un annuaire centralisé. Le choix du serveur de déploiement et de l'architecture ne s'effectue qu'a l'installation. Il est possible, à partir des mêmes scripts, d'installer un composant WAR dans Tomcat et dans plusieurs JBoss ayant des versions différentes.
+Les composants doivent enrichir la description des ressources dont ils ont besoin, permettant une génération des différents fichiers de configuration des serveurs d'applications. Ainsi, il est possible d'installer les composants partout, sans exprimer autre chose que des besoins en termes de ressources.
+Par exemple, si un composant désire une source de données de type MySQL, il l'indique dans un fichier XML spécifique et c'est tout. Les utilitaires se chargent d'installer tous les fichiers, les drivers, etc. pour permettre au composant d'être installé dans tous les serveurs d'applications.
+Pour cela, l'application doit respecter rigoureusement les spécifications JEE pour la gestion des paramètres de déploiement. Il faut utiliser systématiquement les ressources JNDI pour tous les paramètres de déploiement et abandonner l'approche « fichier de propriété » qui a montré ses limites. Il faut respecter le principe « Écrit une fois, exécuté partout »
+Les exigences sur les ressources sont décrites dans un fichier jndi-resources.xml qui peut être placé dans le répertoire META-INF ou bien rester en dehors de l'archive.
+Un premier utilitaire permet alors, à partir de modèles de conversions, de générer tous les fichiers de paramètres pour différents serveurs d'applications, permettant la publication de ressources répondant aux exigences de l'application. Ces fichiers sont partiellement valorisés, car à cette étape, il n'est pas encore nécessaire d'indiquer les noms des machines et autres paramètres de déploiement. Seuls les modèles de fichiers sont nécessaires. Tous les modèles de déploiement peuvent alors être distribués sur les différentes plate-formes d'accueil.
+Un deuxième utilitaire se charge d'exploiter ces modèles de déploiement pour une installation effective sur un ou plusieurs serveurs d'applications cibles, pas nécessairement de la même marque ou de la même version. Des fichiers de propriétés permettent d'indiquer les éléments spécifiques à la plate-forme d'accueil (les adresses des bases de données, les mots de passes, etc).
+Si nécessaire, ces deux étapes peuvent être regroupées en une seule, afin de passer du fichier des exigences de ressources à une installation directe sur les serveurs d'applications.
+Exemple rapide
+Jndi-resources est disponible à cette URL : http://jndi-resources.googlecode.com/. Après avoir téléchargé l'archive, il suffit de la déplier pour pouvoir l'utiliser.
+Prenons l'exemple d'un composant WAR possédant le fichier WEB-INF/web.xml suivant :
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE web-app
+  PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN"
+         "http://java.sun.com/dtd/web-app_2_3.dtd">
+<web-app
+        id="web-sample"
+>
+        <display-name>jndi-resources-web-sample</display-name>
+        <servlet>
+                <servlet-name>HelloServlet</servlet-name>
+                <display-name>Hello Servlet</display-name>
+                <servlet-class>org.sample.HelloJNDIServlet</servlet-class>
+                <load-on-startup>1</load-on-startup>
+        </servlet>
+        <servlet-mapping>
+                <servlet-name>HelloServlet</servlet-name>
+                <url-pattern>/</url-pattern>
+        </servlet-mapping>
+        <welcome-file-list>
+                <welcome-file>/</welcome-file>
+        </welcome-file-list>
+        <resource-ref>
+                <description>La base de données</description>
+                <res-ref-name>jdbc/DB</res-ref-name>
+                <res-type>javax.sql.DataSource</res-type>
+                <res-auth>Application</res-auth>
+                <res-sharing-scope>Shareable</res-sharing-scope>
+        </resource-ref>
+</web-app>
+Notez la valeur du paramètre id du marqueur <web-app/>. Il correspond généralement au path de déploiement de l'archive.
+Nous souhaitons bénéficier de la normalisation du packaging du composant, à savoir, la possibilité de l'utiliser sur tous les serveurs d'applications, indépendamment de leurs marques, de leurs versions ou de leurs architectures. C'est bien l'objectif de la normalisation WAR/EAR.
+Conformément aux spécifications, ce fichier déclare dans <resource-ref/> le besoin d'une ressource de type javax.sql.DataSource pour la clef JNDI java:comp/env/jdbc/DB.
+Suivant les serveurs d'applications, il faut ajouter différents fichiers permettant d'associer la ressource java:comp/env/jdbc/DB avec une autre clef JNDI. Pour JBoss, il faut ajouter le fichier WEB-INF/jboss-web.xml suivant :
+<?xml version="1.0" encoding="UTF-8"?>
+<jboss-web>
+        <resource-ref>
+                <res-ref-name>jdbc/DB</res-ref-name>
+                <res-type>javax.sql.DataSource</res-type>
+                <jndi-name>java:web-sample/jdbc/DB</jndi-name>
+        </resource-ref>
+</jboss-web>
+Pour Tomcat, le fichier META-INF/context.xml suivant :
+<?xml version="1.0" encoding="UTF-8"?>
+<Context 
+        path="/jndi-web-sample"
+        reloadable="true"
+        antiResourceLocking="true" 
+        antiJARLocking="true"
+        privileged="false"
+>
+        <ResourceLink name="jdbc/DB"
+                      global="/web-sample/jdbc/DB"
+                      type="javax.sql.DataSource"/>
+</Context>
+Ces deux fichiers permettent d'associer la clef locale java:comp/env/jdbc/DB avec la clef JVM java:/web-sample/jdbc/DB.
+Par convention, les clefs locales de la branche java:comp/env doivent être associées aux clefs JVM de la branche java:, en préfixant par l'id présent dans le fichier web.xml. Cela permet de lever les ambiguïtés lorsque plusieurs composants sont installés sur le même serveur d'applications. Mais, vous pouvez utiliser d'autres conventions.
+Ces règles de transformations étant systématiques, il est facile de générer ces fichiers à partir du fichier web.xml. Des scripts XSLT sont proposées dans le répertoire $JNDI_HOME/xslt. Ainsi, il suffit de rédiger le fichier web.xml pour obtenir un composant pouvant s'installer partout. En ajoutant les deux fichiers spécifiques, notre composant peut être installé sous Tomcat et JBoss.
+Il faut ensuite ajouter le fichier META-INF/jndi-resources.xml. C'est un nouveau fichier permettant de décrire sémantiquement (et non techniquement) les exigences des ressources du composant applicatif. Il s'agit de méta-informations, absente de web.xml et ejb-jar.xml.
+<?xml version="1.0" encoding="UTF-8"?>
+<resources
+        xmlns="http://jndi-resources.googlecode.com/1.0/"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://jndi-resources.googlecode.com/1.0/
+          http://www.prados.fr/xsd/1.0/jndi-resources.xsd"
+        id="web-sample"
+>
+        <resource name="web-sample/jdbc/DB" familly="jdbc/default" />
+</resources>
+Ce fichier décrit simplement que nous souhaitons une ressource pour la clef java:web-sample/jdbc/DB, et y publier la base de données par défaut, associée au serveur d'applications. Pour JBoss et Tomcat, il s'agit d'une base HSQLDB.
+Vous pouvez télécharger l'archive d'exemple pour tester l'utilisation des différents outils.
+>wget http://jndi-resources.googlecode.com/files/web-sample.war
+L'exemple exploite plus de ressources :
+* une source de donnée jdbc ;
+* une connexion javamail ;
+* un email complémentaire ;
+* une url ;
+* et un nom de host.
+Consultez le fichier META-INF/jndi-resources.xml et le fichier WEB-INF/web.xml du composant dans le SVN (http://tinyurl.com/35xm2v). Toutes ces ressources doivent être publiées par le serveur d'applications. Vous pouvez également consulter le fichier pom.xml de Maven, qui se charge de générer les fichiers spécifiques pour Jboss ou Tomcat.
+Nous désirons générer tous les fichiers de configurations pour tous les serveurs d'applications, quelles que soient leurs versions et également pouvoir installer les drivers d'accès aux ressources. L'utilitaire jndi-config s'en charge.
+>$JNDI_HOME/bin/jndi-config -l \
+        --war web-sample.war \
+        --package ./packages
+Après quelques dizaines de secondes, cela génère un répertoire packages, avec des modèles de fichiers de configuration pour tous les serveurs d'applications et de quoi installer les différents drivers. Le premier lancement est toujours plus long, car il faut télécharger les différentes drivers pour les ressources utilisés par le composants. Dans la tuyauterie, un sous ensemble de Maven permet de télécharger dans le repository local, les archives des drivers nécessaire à l'installation. Si les composants ne sont pas disponibles dans le repository Maven, pour des raisons de licences, il faut les ajouter à la main avant d'invoquer l'utilitaire. Consultez la documentation de Maven pour cela.
+Nous pouvons maintenant installer le composant sur différents serveurs d'applications. Mais il faut auparavant valoriser des variables en conformité avec le déploiement du composant (Cf. Tableau 3: Variables de l'exemple). C'est le rôle de l'installateur du composant de valoriser ces variables. Ce n'est surtout pas le rôle du développeur ou du projet. En effet, ces derniers ne doivent en aucun cas avoir une connaissance de la plate-forme d'exécution ni de son architecture vis à vis de l'annuaire JNDI.
+Variable
+	Description
+	jdbc.username
+	Le nom de l'utilisateur de la base de données.
+	jdbc.password
+	Le mot de passe de l'utilisateur de la base de données.
+	mail.from
+	L'e-mail utilisé lors de l'envoi de messages.
+	mail.e-mail
+	Un autre e-mail.
+	mail.host
+	Le host du serveur de mail.
+	url.default
+	Une URL
+	host.default
+	Un nom de host.
+	Ces variables peuvent être décrites dans un fichier de propriétés platform.properties à créer.
+jdbc.username=sa
+jdbc.password=
+mail.from=no-reply@ici.org
+mon.e-mail=moi@ici.org
+mail.host=locahost
+url.default=http://localhost
+host.default=localhost
+Pour installer le composant sur un serveur JBoss, il faut invoquer la commande ci-dessous, en adaptant le numéro de version et le répertoire d'installation du serveur.
+>$JNDI_HOME/bin/jndi-install \
+        --appsrv jboss --version 5.0 \
+        --package ./package \
+        --dest jboss.server.home=/opt/jboss-5.0
+        --dest jboss.server.conf=/opt/jboss-5.0/server/default \
+        -P platform.properties
+Il ne reste plus qu'a lancer le serveur d'applications et à tester le composant.
+>/opt/jboss-5.0/bin/run.sh
+L'URL à consulter est généralement la suivante http://localhost:8080/web-sample/. Elle peut être différente suivant le port utilisé par la version de JBoss. Le résultat est présenté par l'illustration suivante.
+
+
+  
+
+La page de résultat récupère bien les ressources nécessaires de l'annuaire JNDI. Une consultation de la console JMX de JBoss, et particulièrement du JNDIView, permet de confirmer que l'installation c'est bien effectuée.
+
+
+  
+
+Pour Tomcat, il faut également indiquer le nom du fichier de la base de données pour HSQLDB. Indiquons le dans la ligne de commande, avec le paramètre -D. Voici une installation sur un Tomcat 4.1:
+>$JNDI_HOME/bin/jndi-install \
+        --appsrv tomcat --version 4.1 \
+        --package ./package \
+        --dest catalina.home=/opt/apache-tomcat-4.1 \
+        --dest catalina.base=/opt/apache-tomcat-4.1 \
+        -P platform.properties \
+        -Djdbc.hsqldb.file=MaDB
+Il est possible de procéder de même avec toutes les versions des serveurs d'applications supportées par jndi-resources.
+L'étape de configuration et l'étape d'installation peuvent être combinées avec l'invocation de jndi-resources. Voici l'installation sur un serveur Tomcat 4.1 directement à partir du composant WAR possédant le fichier jndi-resources.xml dans le répertoire META-INF.
+>$JNDI_HOME/bin/jndi-resources \
+        --war web-sample.war \
+        --appsrv tomcat --version 4.1 \
+        --dest catalina.home=/opt/apache-tomcat-4.1 \
+        --dest catalina.base=/opt/apache-tomcat-4.1 \
+        -P platform.properties \
+        -Djdbc.hsqldb.file=MaDB
+Il ne reste plus qu'a lancer le serveur d'applications Tomcat et à tester le composant.
+>/opt/apache-tomcat-4.1/bin/catalina.sh run
+L'URL à consulter est généralement la suivante : http://localhost:8080/web-sample/. Elle peut être différente suivant le port utilisé par votre version de Tomcat. Le résultat est strictement le même qu'avec JBoss (Illustration 6).
+En adaptant les paramètres de la ligne de commande, lors de l'installation du composant, il est possible de choisir différentes architectures. Par exemple, de publier les ressources dans un annuaire centralisé et de les consommer dans d'autres serveurs (Illustration 2), clients de l'annuaire.
+Utilisation avec des EJBs
+Reprenons l'exemple de l'intranet qui désire utiliser un EJB de la Compta. L'EAR de la compta indique la publication de l'EJB.
+<ejb-jar
+  id="compta" 
+>
+  ...
+  <display-name>jndi-ejb-sample</display-name>
+  <enterprise-beans>
+    <session>
+      <display-name>Lookup JNDI</display-name>
+      <ejb-name>Paye</ejb-name>
+      <home>fr.prados.PayeHome</home>
+      <remote>fr.prados.Paye</remote>
+      <ejb-class>fr.prados.PayeSession</ejb-class>
+      <session-type>Stateless</session-type>
+      <transaction-type>Container</transaction-type>
+    </session>
+  <enterprise-beans>
+<ejb-jar>
+Pour que l'EJB soit publié sous la clef /compta/ejb/Paye, il faut ajouter des fichiers spécifiques aux serveurs d'applications. Pour Jboss, cela donne :
+<jboss> 
+   <enterprise-beans> 
+      <session> 
+         <ejb-name>Paye</ejb-name> 
+         <jndi-name>compta/ejb/Paye</jndi-name> 
+    </session>
+  </enterprise-beans>
+</jboss>
+Ce fichier peut être généré automatiquement. Des filtres XSLT sont proposés avec l'outil.
+L'annuaire JNDI de la compta est généralement distant de l'annuaire de l'Intranet. Coté client, on retrouve dans le fichier web.xml, le besoin d'avoir une référence sur l'EJB.
+<web-app id="intranet">
+...
+  <ejb-ref>
+    <description>L'EJB de paye</description>
+    <ejb-ref-name>ejb/Paye</ejb-ref-name>
+    <ejb-ref-type>Session</ejb-ref-type>
+    <home>fr.prados.PayeHome</home>
+    <remote>fr.prados.Paye</remote>
+  </ejb-ref>
+</web-app>
+Les fichiers spécifiques aux différents serveurs d'applications peuvent être générés à l'aide de filtre XSLT. L'idée est de générer un mapping systématique entre un nom de la branche java:comp/env/... vers un nom de la forme java:<id>.... Par exemple, le fichier jboss-web.xml est le suivant :
+<jboss-web>
+...
+   <ejb-ref> 
+      <ejb-ref-name>ejb/Paye</ejb-ref-name> 
+      <jndi-name>java:/intranet/ejb/Paye</jndi-name> 
+   </ejb-ref> 
+</jboss-web>
+Il faut maintenant déclarer les besoins en ressources dans le fichier jndi-resources.xml. Nous souhaitons un lien vers l'annuaire distant de la Compta, puis un lien entre la clef locale java:/intranet/ejb/Paye et l'EJB de paye.
+<resources ...>
+...
+  <!-- Lien vers l'annuaire JNDI de la compta -->
+  <resource name="/ServiceCompta" familly="jndi/default">
+  java.naming.provider.url=${jndi-compta}
+  </resource>
+
+
+ <!-- Lien d'une clef locale vers la clef de l'annuaire de la compta -->
+  <resource name="intranet/ejb/Paye" familly="link/default">
+     <property name="link" value="/ServiceCompta/compta/ejb/LookupJndi"/>
+
+
+ </resource>
+</resources>
+Rien n'indique la localisation du serveur de la Compta, s'il y a utilisation du même annuaire ou de deux annuaires. Lors de l'installation les choix de l'architecture de déploiement seront effectués. Par exemple, lors de l'installation du client de l'EJB, il faut valoriser la variable jndi compta.
+>$JNDI_HOME/bin/jndi-install \
+        --appsrv jboss --version 5.0 \
+        --package ./package \
+        --dest jboss.server.home=/opt/jboss-5.0
+        --dest jboss.server.conf=/opt/jboss-5.0/server/default \
+        -P platform.properties
+        -D jndi-compta=jnp://comptahost:1099
+Si l'intégrateur décide d'utiliser le même serveur d'applications pour la compta et l'intranet, il valorise la variable jndi-compta avec jnp://localhost:1099 et c'est réglé. Aucune intervention n'a été nécessaire sur les composants.
+Famille de ressources
+Le tableau suivant décrit les différentes familles de ressources gérées par l'outil. Cela permet de produire les fichiers de paramètres spécifiques à chaque serveur d'applications, pour répondre aux exigences du composant, décrites dans le fichier jndi-resources.xml.
+Famille
+	Description
+	host/default
+	Déclare un host dans l'arbre JNDI.
+	jdbc/default
+	Utilise la base de données par défaut du serveur d'applications.
+	jdbc/hsqldb
+	Utilise une base de données de type HSQLDB.
+	jdbc/mysql
+	Utilise une base de données MySql.
+	jdbc/oracle
+	Utilise une base de données Oracle.
+	jms/default
+	Utilise les serveur JMS par défaut du serveur d'applications.
+	jms/jboss
+	Utilise les drivers du serveur JMS du JBoss courant (JBoss MQ ou JBoss Messaging suivant les cas).
+	jms/jbossmq
+	Utilise spécifiquement un serveur JMS JBoss MQ.
+	jms/jboss-messaging
+	Utilise spécifiquement un serveur JMS JBoss Messaging.
+	jndi/default
+	Propose un lien vers un annuaire JNDI de la même famille que celle du serveur d'applications.
+	jndi/cos
+	Propose un lien vers un référentiel d'objets CORBA.
+	jndi/dns
+	Permet un accès à un serveur DNS
+	jndi/file
+	Permet un accès à un répertoire.
+	jndi/jboss
+	Offre la manipulation d'un annuaire JNDI JBoss distant.
+	jndi/ldap
+	Manipule un serveur LDAP.
+	jndi/rmi
+	Consulte une référentiel RMI.
+	mail/default
+	Une session Javamail.
+	mail/email
+	Une adresse email.
+	url/default
+	Déclare une URL dans le annuaire JNDI.
+	link/default
+	Déclare un lien entre clefs JNDI.
+	La famille jndi/ est très peu connue. Elle permet de lier différents annuaires entre eux, et de complexifier l'architecture globale (Cf.Illustration 2). Par exemple, un annuaire d'entreprise peut proposer une ressource d'accès à l'annuaire LDAP. Un annuaire Intranet propose d'autres ressources et également un lien vers l'annuaire d'entreprise. On peut combiner tout cela pour organiser les annuaires comme on le souhaite, sans que le composant applicatif en ait connaissance. Il s'agit de choix de déploiement, pas de développement. Nous avons utilisé cette fonctionnalité pour utiliser les EJBs.
+Le driver jndi/file est amusant. Il permet de simuler un annuaire en exploitant un répertoire du système d'exploitation.
+Les drivers nécessaires aux ressources sont récupérés automatiquement via le référentiel racine de Maven. Si des librairies ne sont pas disponibles, généralement pour des contraintes de licences, il faut les ajouter à la main dans le repository local. Consultez la documentation de Maven pour cela (http://maven.apache.org).
+Par exemple, les librairies d'accès aux files JMS ne peuvent être publiées dans le repository Maven, car Sun l'interdit. Si la librairie est nécessaire à l'installation de la ressource, les outils vont produire une exception indiquant la démarche à suivre.
+Try downloading the file manually from the project website.
+
+
+Then, install it using the command: 
+    mvn install:install-file -DgroupId=javax.jms -DartifactId=jms -Dversion=1.1 -Dpackaging=jar -Dfile=/path/to/file
+
+
+Alternatively, if you host your own repository you can deploy the file there: 
+    mvn deploy:deploy-file -DgroupId=javax.jms -DartifactId=jms -Dversion=1.1 -Dpackaging=jar -Dfile=/path/to/file -Durl=[url] -DrepositoryId=[id]
+Téléchargez l'archive officielle sur le site de Sun, puis utilisez Maven comme indiqué pour l'installer dans votre repository local.
+Il est possible d'indiquer plus de précisions pour déclarer une ressource.
+<?xml version="1.0" encoding="UTF-8"?>
+<resources xmlns="http://www.jndi-resources.org/1.0/"
+        id="jndi-web-sample">
+        <resource name="jndi-web-sample/jdbc/Default" familly="jdbc/oracle">
+                <property name="min-pool-size" value="5"/>
+                <property name="max-pool-size" value="20"/>
+                <property name="prepared-statement-cache-size" value="32"/>
+        </resource>
+</resources>
+En ajoutant des propriétés à la ressource, les fichiers de paramètres des serveurs d'applications seront adaptés. Des variables seront présentes dans les modèles générés par jndi-config. Elles devront être valorisées lors de l'installation. L'outil utilise l'approche indiquée dans Linux Magazine n°103, dans l'article intitulé « XML : Ouverture sur le monde ». Les variables peuvent donc être valorisées par des fichiers de propriétés correspondant à la plate-forme, ou être extrait d'autres fichiers XML, de feuilles de calculs OpenOffice.org via des requêtes Xpath, etc.
+Serveurs gérés
+Pour le moment, l'outil est capable de convertir le fichier jndi-resources.xml pour générer les fichiers de paramétrages pour les serveurs Tomcat et JBoss toutes versions, avec plusieurs architectures pour JBoss. Le serveur peut être autonome et exploiter un annuaire local ; il peut également jouer uniquement le rôle d'annuaire JNDI pour publier les ressources. Dans ce cas, d'autres serveurs JBoss doivent jouer le rôle de clients JNDI. Enfin, une instance JBoss peut servir des files JMS. Le Tableau 5: Gestions des ressources reprend les différentes combinaisons gérées à ce jour. Les cases indiquent si la combinaison peut être traité. Si ce n'est pas le cas, il s'agit d'une limitation du serveur et non de l'outil. Par exemple, JBoss 3.2 ne permet pas de publier une source de données, en dehors de la branche java:. Les cases ayant un simple point ne génèrent rien, car cela n'a pas de sens dans ce contexte.
+
+
+  
+
+Appel à la communauté
+L'objectif de cet outil est d'être capable d'installer un composant JEE dans tous les serveurs d'applications. Il faut pour cela ajouter la publication des ressources vers d'autres serveurs d'applications (IBM WebSphere, BEA Weblogic, JOnAS, Sun GlassFish, etc.). Je fais appel aux bonnes volontés pour m'aider à faire évoluer cet outil. Ainsi, les composants JEE pourront passer instantanément d'une marque de serveur à une autre, comme c'est déjà le cas entre Tomcat et Jboss. De nombreux projets travaillent avec un serveur et déploient sur un autre. Cela sera plus facile lorsque tous les serveurs seront pris en compte. Nous pourrons revendiquer le principe « Écrit une fois, installé partout ».
+Pour pouvoir ajouter de nouvelles ressources ou de nouveaux serveurs d'applications, il faut maîtriser les deux moteurs présents dans le composant. Ce n'est pas très compliqué. Il suffit de maîtriser un peu XSLT.
+Moteur d'installation
+jndi-install est un moteur d'installation très simple. Il se base sur une structure de répertoires, des fichiers aux extensions particulières et des paramètres.
+Un script d'installation est décrit à partir d'un répertoire racine que nous appelons $PACKAGES. Dans ce répertoire, il doit y avoir un sous-répertoire par serveur d'applications cible.
+Pour chaque serveur d'applications, il doit y avoir autant de sous-répertoires que de répertoires majeurs du serveur d'applications. Par exemple, pour Tomcat, il existe deux répertoires majeurs : catalina.home et catalina.base. Pour JBoss, il existe d'autres répertoires. Les noms sont libres.
+Les fichiers présents dans ces répertoires seront recopiés tels quels dans les répertoires correspondants du serveur d'applications. Des paramètres de la ligne de commande permettent d'associer un répertoire majeur à un répertoire du serveur d'applications.
+Le fichier $PACKAGES/version.xml, s'il est présent, permet d'associer plusieurs versions de serveurs d'applications aux mêmes modèles.
+<versions
+        xmlns="http://jndi-resources.googlecode.com/1.0/versions"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://jndi-resources.googlecode.com/1.0/versions
+          tools/xsd/jndi-resources-versions.xsd"
+>
+        <appsrv name="jboss"          versions="[3.0,4.0)"   target="jboss3_x"/>
+        <appsrv name="jboss"          versions="[4.0,)"      target="jboss4_x"/>
+        <appsrv name="jboss-jms-srv"  versions="[3.0,5.0)"   target="jboss3_x-jms-srv"/>
+        <appsrv name="jboss-jms-srv"  versions="[5.0,)"      target="jboss5_x-jms-srv"/>
+        <appsrv name="jboss-jndi-srv" versions="[3.2,4.0)"   target="jboss3_x-jndi-srv"/>
+        <appsrv name="jboss-jndi-srv" versions="[4.0,)"      target="jboss4_x-jndi-srv"/>
+        <appsrv name="jboss-jndi-cli" versions="[3.2,)"      target="jboss3_x-jndi-cli"/>
+        <appsrv name="tomcat"         versions="[4.0,5.5)"   target="tomcat4_0"/>
+        <appsrv name="tomcat"         versions="[5.5,6.0)"   target="tomcat5_5"/>
+        <appsrv name="tomcat"         versions="[6.0,)"      target="tomcat6_0"/>
+</versions>
+Ainsi, lors de l'installation, l'utilisateur n'a pas à connaître le modèle de paramètres à utiliser.
+Pour utiliser cela, il faut lancer la ligne de commande suivante :
+jndi-install --package $PACKAGE \
+  --appsrv jboss --version 3.2 \
+  --dest jboss.server.home=/opt/jboss-3.2
+  --dest jboss.server.conf=/opt/jboss-3.2/server/default \
+Cela a pour effet d'analyser le fichier version.xml pour identifier un modèle de paramètres à installer. Dans le cas présent, il s'agit d'utiliser le répertoire $PACKAGE/jboss3_x.
+Ce répertoire possède deux sous-répertoires : jboss.server.conf et jboss.server.home. Il est donc nécessaire d'associer ces répertoires aux répertoires du serveur à paramétrer. Les deux paramètres --dest s'en chargent.
+Pratiquement tous les fichiers du répertoire $PACKAGE/jboss3_x/jboss.server.home sont copiés dans le répertoire /opt/jboss-3.2. Puis, pratiquement tous les fichiers du répertoire $PACKAGE/jboss3_x/jboss.server.conf sont copiés dans le répertoire /opt/jboss-3.2/server/default.
+Les fichiers qui possèdent les extensions .jndi ou .link subissent un traitement particulier.
+Les fichiers .link permettent de déclarer un lien vers un autre fichier, à l'aide d'un lien relatif. Le contenu doit être un texte dont la première ligne indique où trouver l'original du fichier. La première ligne est lue par le programme, puis le nom du fichier source est calculé avant d'être copié à la place du fichier .link. Cette fonctionnalité permet de partager des fichiers entres les différents serveurs d'applications. Par exemple, un driver Oracle sera présent dans le répertoire $PACKAGE/lib et référencé dans les différents modèles à l'aide de fichiers d'extension .link.
+Les fichiers d'extension .jndi sont plus complexes. Ils permettent de manipuler les fichiers XML lors de l'installation. En effet, les serveurs d'applications utilisent généralement des fichiers au format XML. Ces fichiers vont posséder les paramètres dont il faut encore valoriser certaines variables comme l'utilisateur et le mot de passe d'une source de données. Il peuvent également posséder des extraits XML à insérer dans d'autres fichiers XML du serveur d'applications.
+Pour traiter ces fichiers, le moteur d'installation commence par y extraire les processing-instructions XML du type jndi-stylesheet ou xml-stylesheet. Ces deux instructions sont équivalentes.
+<?jndi-stylesheet href="xslt/save.xslt" target="deploy/default-ds.xml"?>
+Puis le paramètre href est analysé pour connaître la feuille de style à appliquer. La base de répertoire correspond à $PACKAGE. Il doit alors exister une feuille dans $PACKAGE/xslt/save.xslt. Les feuilles de styles sont au format XSL 2.0. S'il existe d'autres paramètres, ils sont valorisés dans le moteur XSL avant de lancer la transformation. Par exemple, le paramètre target de l'instruction valorise la variable XSL correspondante.
+<xsl:variable name="target">deploy/default-ds.xml</xsl:variable>
+Il est possible d'enchaîner les transformations, en indiquant plusieurs instructions à la suite. Les modifications seront organisées sous la forme d'un tube.
+<?jndi-stylesheet href="xslt/update-tomcat-server.xslt"?>
+<?jndi-stylesheet href="xslt/save.xslt" target="conf/server.xml"?>
+Le résultat de la première transformation sert d'entrée à la deuxième transformation.
+Avant d'appliquer les transformations aux fichiers .jndi, toutes les variables au format ${...} sont converties en leurs valeurs respectives. Les feuilles de styles manipulent alors des fichiers textes sans aucune variable.
+L'utilitaire jndi-config se charge d'alimenter le répertoire $PACKAGE à partir des descriptions des ressources, mais vous n'êtes pas obligés de l'utiliser pour exploiter le moteur d'installation. Vous pouvez également enrichir le résultat proposé en ajoutant d'autres fichiers à recopier dans la configuration des différents serveurs d'applications, ou d'autres fichiers .jndi suivant le modèle de transformation proposé.
+Cela permet, par exemple, d'adapter des paramètres spécifiques au serveur d'applications lors de l'installation du composant. Cela présente des risques d'effet de bord sur les autres composants déjà présents dans le même serveur. Un paramètre d'un serveur à un impact sur tous les composants hébergés par ce dernier. Ceci est possible, mais pas recommandé, car cela peut entraîner une spécialisation du serveur d'applications à une application particulière. Il est alors plus difficile de mutualiser les ressources.
+Moteur de configuration
+Comme pour l'installation, la génération des différentes configurations pour les différents serveurs d'applications s'appuie sur un moteur et des transformations XSL 2.0.
+Un modèle de transformation est proposé pour générer toutes les déclinaisons à partir du fichier jndi-resources.xml. Une implantation est disponible par défaut dans le répertoire $JNDI_HOME/templates. Elle peut être enrichie ou modifiée pour tenir compte des spécificités de votre entreprise. Cela permet de garantir une approche uniforme dans la gestion des ressources des composants JEE sur les différentes plate-formes de pré-intégration, intégration, etc.
+Le répertoire $JNDI_HOME/templates/ est organisé comme indiqué dans le Tableau 5: Gestions des ressources.
+Chaque modèle de transformation est porté par un répertoire (jboss3_x, tomcat4_0, tomcat5_5, etc.). Pour chacun des modèles, un répertoire est proposé pour chaque famille de ressources décrite dans le fichier jndi-resources.xml.
+Le moteur exécute successivement différents fichiers XSL, avec le fichier de ressources en entrée et différents paramètres permettant d'aider les traitements.
+Le processus est le suivant :
+* exécution de $TEMPLATES/process.xslt ;
+* pour chaque répertoire présent dans $TEMPLATES, sauf pour $TEMPLATES/tools :
+   * exécution de $TEMPLATES/modèle/process.xslt ;
+* pour chaque famille trouvée dans le fichier jndi-properties.xml :
+   * exécution de $TEMPLATES/modèle/famille/process.xslt.
+Par exemple, si le fichier ne possède que la famille jdbc/default, avec uniquement les modèles tomcat4_0 et jboss3_x, les fichiers suivants sont exécutés :
+* $TEMPLATES/process.xslt
+* $TEMPLATES/jboss3_x/process.xslt
+* $TEMPLATES/jboss3_x/jdbc/default/process.xslt
+* $TEMPLATES/tomcat4_0/process.xslt
+* $TEMPLATES/tomcat4_0/jdbc/default/process.xslt
+Ces traitements ont pour vocation de générer les fichiers nécessaires au moteur d'installation.
+Pour ajouter un nouveau serveur, il suffit d'ajouter un répertoire dans la racine, de le déclarer dans le fichier $TEMPLATES/version.xml et de s'inspirer des autres transformations.
+Ensuite, tous dépend des transformations effectuées dans les modèles de transformation. Consultez les sources pour avoir plus de précisions.
+Les transformations étant généralement proches d'une version de serveur à l'autre, des <xsl:include/> permettent de récupérer le code décrit pour une autre version. Par convention, la version de référence est la plus récente. Les autres en dépendent généralement. Il est alors possible de supprimer du modèle les anciennes versions qui ne sont plus maintenues, par effacement des répertoires.
+La documentation propose un guide pour ajouter une nouvelle ressource pour les serveurs JBoss et Tomcat. C'est un bon début pour comprendre comment tous cela fonctionne. Si vous maîtrisez XSLT, ce n'est pas très compliqué. Sinon, c'est l'occasion de vous y mettre !
+Conclusion
+Cet outil est jeune. Je viens de le publier. Il permet déjà aux équipes de développement, travaillant en environnement Open Source, d'uniformiser les déploiements, de migrer d'une version de serveur à la suivante, de Tomcat vers JBoss, d'une architecture avec un annuaire local vers une architecture utilisant un annuaire centralisé, en proposant beaucoup de ressources que l'on ne trouve pas toujours dans les serveurs d'applications. Le code n'a plus besoin de mélanger les techniques pour gérer les paramètres de déploiements : JNDI pour certaines ressources et fichier de propriétés pour les autres.
+De plus en plus d'équipes développent sous JBoss et déploient sous WebSphere ou d'autres serveurs commerciaux. J'espère que des bonnes volontés m'aideront à porter l'outil vers ces serveurs, afin d'aider ces projets. Ainsi, le développeur publiera un composant et pourra le tester indifféremment sur JBoss ou WebSphere.
+L'outil est fortement documenté dans le Wiki associé. Tous est présent ici : http://jndi-resources.googlecode.com
+J'ai hâte de recevoir vos retours d'expériences sur vos différents projets. Testez dans un premier temps la génération des Datasources ou des files JMS. Ensuite, vous pourrez migrer votre application pour n'utiliser que des clefs JNDI pour tous les paramètres de déploiement. Si cela fonctionne, dite le moi ! Si vous avez rencontré des difficultés ou souhaitez des évolutions, faîte le moi également savoir. Inscrivez vous ici : http://groups.google.com/group/jndi-resources pour suivre les évolutions.
+Ensemble, revendiquons le principe « Écrit une fois, installé partout ».
