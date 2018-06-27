@@ -1,5 +1,7 @@
 import os
 
+from unidecode import unidecode
+
 
 def sanitize_input_text(input_text_path):
     print('*******************************')
@@ -9,9 +11,9 @@ def sanitize_input_text(input_text_path):
     for filename in os.listdir(input_text_path):
         with open(input_text_path + '/' + filename) as input_text:
             for line in input_text:
-                # line = unidecode(line.lower())
+                line = unidecode(line.lower())
                 training_data.append(line)
-    training_data = '\n\n'.join(training_data)
+    training_data = '\n'.join(training_data)
     print('*******************************')
     print('Input text sanitized !')
     print('*******************************')

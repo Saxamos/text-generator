@@ -6,16 +6,16 @@ from text_generator.predictor import predictor
 from text_generator.text_sanitizer import text_sanitizer
 
 MODEL_PATH = 'models/weights-improvement-{}.hdf5'
-TEXT_STARTER = 'Java propose un mécanisme de sécurité très fin, permettant de contrôler l’accès à toutes les ressour'
+TEXT_STARTER = 'java propose un mecanisme de securite tres fin, permettant de controler l acces '
 
 
 @click.command()
 @click.option('--input-text-path', default='data/sub_articles_ppr_linux_mag', type=click.Path(),
               help='Path of the input training text.')
-@click.option('--sequence-length', default=100, help='Length of the input sequences given to the RNN.')
+@click.option('--sequence-length', default=80, help='Length of the input sequences given to the RNN.')
 @click.option('--number-of-character-between-sequences', default=3)
 @click.option('--number-of-epoch', default=50, help='Number of iteration for the training part.')
-@click.option('--batch-size', default=100, help='Number of sequences by batch.')
+@click.option('--batch-size', default=1000, help='Number of sequences by batch.')
 @click.option('--text-starter', default=TEXT_STARTER, help='Beginning of the sentence to be predicted.')
 @click.option('--prediction-length', default=1500, help='Length of the desired text to predict.')
 @click.option('--temperature', default=0.3, help='A low temperature will give something conservative. With a high '
