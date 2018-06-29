@@ -6,30 +6,28 @@ from text_generator.predictor import predictor
 from text_generator.text_sanitizer import text_sanitizer
 
 MODEL_PATH = 'models/weights-improvement-{}.hdf5'
-TEXT_STARTER = 'java propose un mecanisme de securite tres fin, permettant de controler l acces '
+TEXT_STARTER = 'java propose un mecanisme de securite tres fin, permettant de controler l acces a la memoire. ' \
+               'il y a en effet un biais dans la construction de l algor'
 
 
 @click.command()
 @click.option('--input-text-path', default='data/sub_articles_ppr_linux_mag', type=click.Path(),
               help='Path of the input training text.')
-@click.option('--sequence-length', default=80, help='Length of the input sequences given to the RNN.')
-@click.option('--number-of-character-between-sequences', default=3)
-@click.option('--number-of-epoch', default=50, help='Number of iteration for the training part.')
-@click.option('--batch-size', default=1000, help='Number of sequences by batch.')
+@click.option('--sequence-length', default=150, help='Length of the input sequences given to the RNN.')
+@click.option('--number-of-epoch', default=500, help='Number of iteration for the training part.')
+@click.option('--batch-size', default=500, help='Number of sequences by batch.')
 @click.option('--text-starter', default=TEXT_STARTER, help='Beginning of the sentence to be predicted.')
 @click.option('--prediction-length', default=1500, help='Length of the desired text to predict.')
-@click.option('--temperature', default=0.3, help='A low temperature will give something conservative. With a high '
-                                                 'temperature the predictions will be more original, but with'
-                                                 ' possibly more mistakes')
+@click.option('--temperature', default=0.05, help='A low temperature will give something conservative. With a high '
+                                                  'temperature the predictions will be more original, but with'
+                                                  ' possibly more mistakes')
 def main(**kwargs):
-
     training_data, character_list_in_training_data = text_sanitizer.sanitize_input_text(kwargs['input_text_path'])
 
     x_train_sequences, y_train_sequences = pre_processor.prepare_training_data(
         training_data,
         character_list_in_training_data,
-        kwargs['sequence_length'],
-        kwargs['number_of_character_between_sequences']
+        kwargs['sequence_length']
     )
 
     if click.confirm('Do you want to use a pre-trained model?', default=True):
@@ -67,4 +65,3 @@ main()
 # TODO: CE continuous evaluation : https://medium.com/@rstojnic/continuous-integration-for-machine-learning-6893aa867002
 # TODO: générer un fichier audio avec google api ?
 # TODO: reprendre les tests + faire IDD
-# TODO: essayer avec majuscules + paramètres de karpathy (dropout & seq length)

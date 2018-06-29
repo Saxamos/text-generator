@@ -1,4 +1,4 @@
-from keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint, TensorBoard
 from keras.layers import Dense, LSTM, Activation, Dropout
 from keras.models import Sequential, load_model
 
@@ -22,7 +22,7 @@ def load_pre_trained_model(model_path):
 def train_the_model(model, x_train_sequences, y_train_sequences, epoch_number, batch_size):
     checkpoint_path = 'models/weights-improvement-{epoch:02d}-{loss:.4f}.hdf5'
     checkpoint = ModelCheckpoint(checkpoint_path, monitor='loss', verbose=1, save_best_only=True, mode='min')
-
+    tensorboard = TensorBoard(log_dir='./logs', batch_size=batch_size, write_graph=True, write_grads=False)
     print('*******************************')
     print('Begining the training...')
     print('*******************************')
@@ -31,7 +31,7 @@ def train_the_model(model, x_train_sequences, y_train_sequences, epoch_number, b
         y_train_sequences,
         batch_size=batch_size,
         epochs=epoch_number,
-        callbacks=[checkpoint],
+        callbacks=[checkpoint, tensorboard],
         verbose=1
     )
     print('*******************************')

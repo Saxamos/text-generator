@@ -3,7 +3,7 @@ import numpy as np
 from text_generator.data_processor import data_processor
 
 
-def prepare_training_data(training_data, character_list_in_training_data, sequence_length, skip_rate):
+def prepare_training_data(training_data, character_list_in_training_data, sequence_length):
     print('*******************************')
     print('One-hot encoding...')
     print('*******************************')
@@ -20,8 +20,7 @@ def prepare_training_data(training_data, character_list_in_training_data, sequen
     print('*******************************')
     x_train_sequences, y_train_sequences = _create_sequences_with_associated_labels(
         one_hot_encoded_character_sequence,
-        sequence_length,
-        skip_rate
+        sequence_length
     )
     print('*******************************')
     print('Input data created')
@@ -30,11 +29,11 @@ def prepare_training_data(training_data, character_list_in_training_data, sequen
     return x_train_sequences, y_train_sequences
 
 
-def _create_sequences_with_associated_labels(one_hot_encoded_input_text, sequence_length, skip_rate):
+def _create_sequences_with_associated_labels(one_hot_encoded_input_text, sequence_length):
     x_train_sequences, y_train_sequences = [], []
     text_length = len(one_hot_encoded_input_text)
 
-    for i in range(0, text_length - sequence_length, skip_rate):
+    for i in range(0, text_length - sequence_length):
         x_train = one_hot_encoded_input_text[i:(i + sequence_length)]
         y_train = one_hot_encoded_input_text[i + sequence_length]
         x_train_sequences.append(x_train)

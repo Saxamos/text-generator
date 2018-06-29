@@ -22,7 +22,15 @@ def sanitize_input_text(input_text_path):
     character_list_in_training_data = sorted(occurence_by_character_dict.keys())
     for key in sorted(occurence_by_character_dict, key=occurence_by_character_dict.get, reverse=True):
         print(repr(key), occurence_by_character_dict[key])
+        if occurence_by_character_dict[key] < 50:
+            training_data.replace(key, '')
     print('*******************************')
     print('Cardinal of character set : {}'.format(len(character_list_in_training_data)))
     print('*******************************')
-    return training_data, character_list_in_training_data
+
+    new_occurence_by_character_dict = {character: training_data.count(character) for character in set(training_data)}
+    new_character_list_in_training_data = sorted(new_occurence_by_character_dict.keys())
+    print('*******************************')
+    print('Cardinal of new character set : {}'.format(len(new_character_list_in_training_data)))
+    print('*******************************')
+    return training_data, new_character_list_in_training_data
