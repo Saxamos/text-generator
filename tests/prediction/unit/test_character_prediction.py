@@ -1,6 +1,6 @@
 from unittest.mock import Mock
 
-from prediction.character_prediction import CharacterPrediction
+from text_generator.prediction.character_prediction import CharacterPrediction
 
 CERTAIN_PROBABILITY = 1
 

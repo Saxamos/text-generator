@@ -2,15 +2,15 @@ import os
 from os import path
 from unittest import TestCase
 
-from prediction.character_prediction import CharacterPrediction
-from prediction.text_prediction import TextPrediction
-from prediction.training_file_reader import TrainingFileReader
-from prediction.training_model_loader import TrainingModelLoader
 from text_generator.legacy_prediction import legacy_prediction
+from text_generator.prediction.character_prediction import CharacterPrediction
 from text_generator.prediction.prediction import Prediction
+from text_generator.prediction.text_prediction import TextPrediction
+from text_generator.prediction.training_file_reader import TrainingFileReader
+from text_generator.prediction.training_model_loader import TrainingModelLoader
 
 CURRENT_PATH = os.path.dirname(os.path.realpath(__file__))
-ROOT_PATH = path.join(CURRENT_PATH, '..', '..')
+ROOT_PATH = path.join(CURRENT_PATH, '..', '..', '..')
 DATA_PATH = path.join(ROOT_PATH, 'data')
 MODEL_PATH = path.join(ROOT_PATH, 'models')
 

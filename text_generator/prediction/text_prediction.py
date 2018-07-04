@@ -1,4 +1,4 @@
-from prediction.character_prediction import CharacterPrediction
+from text_generator.prediction.character_prediction import CharacterPrediction
 
 
 class TextPrediction(object):

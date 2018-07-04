@@ -1,6 +1,6 @@
 from unittest.mock import Mock, call
 
-from prediction.text_prediction import TextPrediction
+from text_generator.prediction.text_prediction import TextPrediction
 
 
 def test_predict_one_character_should_return_the_text_starter_with_predicted_character():

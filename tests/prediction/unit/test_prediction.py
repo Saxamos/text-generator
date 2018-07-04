@@ -1,8 +1,8 @@
 from unittest import TestCase
 from unittest.mock import Mock
 
-from prediction.model import Model
-from prediction.prediction import Prediction
+from text_generator.prediction.model import Model
+from text_generator.prediction.prediction import Prediction
 
 
 class TestPrediction(TestCase):

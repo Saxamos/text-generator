@@ -1,6 +1,6 @@
 import numpy as np
 
-from data_processor import data_processor
+from text_generator.data_processor import data_processor
 
 
 class CharacterPrediction(object):
