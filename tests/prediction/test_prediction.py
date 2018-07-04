@@ -32,7 +32,7 @@ def test_predict_text_with_05_1_5708_model():
                                  use_pretrained_model=True, train_model=False)
 
     # When
-    result = predict_text(trained_model_path, text_starter, prediction_length, INPUT_TEXT_PATH, SANITIZED_TEXT_PATH)
+    result = predict_text(trained_model_path, INPUT_TEXT_PATH, text_starter, prediction_length)
 
     # Then
     assert result == expected
@@ -55,7 +55,7 @@ def test_predict_text_with_all_models():
     result = []
     for trained_model_path in trained_model_path_array:
         result.append(
-            predict_text(trained_model_path, text_starter, prediction_length, INPUT_TEXT_PATH, SANITIZED_TEXT_PATH))
+            predict_text(trained_model_path, INPUT_TEXT_PATH, text_starter, prediction_length))
 
     # Then
     assert result == expected
