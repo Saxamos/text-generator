@@ -13,7 +13,7 @@ class TestPrediction(TestCase):
         self.text_prediction = Mock()
         self.prediction = Prediction(self.training_file_reader, self.training_model_loader, self.text_prediction)
 
-    def test_predict_text(self):
+    def test_should_predict_text_with_the_given_length_based_on_character_by_character_prediction(self):
         # Given
         path_to_trained_model = 'path/to/trained/model'
         path_to_training_input = 'path/to/training/input'
