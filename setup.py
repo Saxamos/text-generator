@@ -13,9 +13,9 @@ setup(
     url='http://github.com/Saxamos/text_generator',
     install_requires=[
         'click',
-        'numpy',
+        'tensorflow',
         'keras',
-        'pytest',
+        'numpy',
         'unidecode',
         'h5py'
     ],
