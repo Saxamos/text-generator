@@ -40,3 +40,15 @@ def _create_sequences_with_associated_labels(one_hot_encoded_input_text, sequenc
         y_train_sequences.append(y_train)
 
     return np.array(x_train_sequences), np.array(y_train_sequences)
+
+
+def prepare_embedding_training_data(training_data, character_list_in_training_data, sequence_length):
+    encoded_character_sequence = [character_list_in_training_data.index(char) for char in training_data]
+    x_train_sequences, y_train_sequences = _create_sequences_with_associated_labels(
+        encoded_character_sequence,
+        sequence_length
+    )
+    one_hot_y_train_sequences = np.zeros((len(y_train_sequences), len(character_list_in_training_data)))
+    for i in range(len(one_hot_y_train_sequences)):
+        one_hot_y_train_sequences[i][y_train_sequences[i]] = 1
+    return x_train_sequences, one_hot_y_train_sequences
