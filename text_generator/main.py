@@ -93,7 +93,7 @@ def multi_predict(**kwargs):
               help='Path of the input training text.')
 @click.option('--sequence-length', default=100, help='Length of the input sequences given to the RNN.')
 @click.option('--number-of-epoch', default=100, help='Number of iteration for the training part.')
-@click.option('--batch-size', default=100, help='Number of sequences by batch.')
+@click.option('--batch-size', default=1000, help='Number of sequences by batch.')
 @click.option('--text-starter', default=TEXT_STARTER, help='Beginning of the sentence to be predicted.')
 @click.option('--prediction-length', default=3000, help='Length of the desired text to predict.')
 @click.option('--temperature', default=0.4, help='A low temperature will give something conservative. With a high '
@@ -144,7 +144,7 @@ TEXT_STARTER = 'java propose un mecanisme de securite tres fin, permettant de co
                                                  ' possibly more mistakes')
 def embedded_multi_predict(**kwargs):
     training_data, character_list_in_training_data = text_sanitizer.sanitize_input_text(kwargs['input_text_path'])
-    for model_name in ['04-1.1989', '05-1.1963']:
+    for model_name in ['01-1.8619', '04-1.2169', '15-1.0876', '30-1.0466', '50-1.0209', '70-1.0046', '84-0.9955']:
         print(model_name)
         model = neural_network.load_pre_trained_model(MODEL_PATH.format(model_name))
 

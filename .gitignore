@@ -9,3 +9,4 @@ __pycache__
 .DS_Store
 models
 models_aout/
+models_aout_prediction/
