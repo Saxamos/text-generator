@@ -8,3 +8,5 @@ __pycache__
 .eggs
 .DS_Store
 models
+data/Articles PPR/
+data/articles_ppr_linux_mag
