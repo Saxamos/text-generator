@@ -4,6 +4,8 @@ import pytest
 from text_generator.neural_network.neural_network import load_pre_trained_model, train_the_model, generate_model
 from text_generator.predictor.predictor import predict
 
+# np.random.seed(seed=42)
+
 
 # TODO: tester avec un model a la main fait dans le given (fait => remove duplication)
 class TestPredict:
@@ -135,4 +137,4 @@ class TestPredictWithNewModel:
 
         # Then
         assert str(error.value) == (
-            'Error when checking : expected lstm_5_input to have shape (3, 2) but got array with shape (5, 2)')
+            'Error when checking input: expected lstm_3_input to have shape (3, 2) but got array with shape (5, 2)')
