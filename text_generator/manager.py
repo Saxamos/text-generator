@@ -1,6 +1,10 @@
 import click
 
-from text_generator.prediction.prediction import predict_text
+from text_generator.prediction.character_prediction import CharacterPrediction
+from text_generator.prediction.prediction import Prediction
+from text_generator.prediction.text_prediction import TextPrediction
+from text_generator.prediction.training_file_reader import TrainingFileReader
+from text_generator.prediction.training_model_loader import TrainingModelLoader
 from text_generator.training.training import train_model
 
 TEXT_STARTER = 'a start of length thirty lolil'
@@ -30,8 +34,11 @@ def train(input_text_path, sequence_length, epoch_number, batch_size):
                                                  'temperature the predictions will be more original, but with'
                                                  ' possibly more mistakes')
 def predict(input_text_path, trained_model_path, text_starter, prediction_length, temperature):
-    predict_text(input_text_path, trained_model_path, text_starter, prediction_length, temperature)
+    prediction = Prediction(TrainingFileReader(), TrainingModelLoader(), TextPrediction(CharacterPrediction()))
+    prediction.predict_text(trained_model_path, input_text_path, text_starter, prediction_length, temperature)
 
+# TODO: README
+# TODO: reprendre l'IDD
 # TODO: générer un fichier audio avec google api ?
 
 # @run.command()
