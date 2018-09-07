@@ -1,3 +1,4 @@
+-e .
 click
 numpy
 keras

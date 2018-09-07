@@ -10,3 +10,6 @@ __pycache__
 models
 data/Articles PPR/
 data/articles_ppr_linux_mag
+
+models_aout/
+models_aout_prediction/

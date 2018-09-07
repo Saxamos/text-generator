@@ -16,12 +16,10 @@ def predict(model, text_starter, prediction_length, character_list_in_train_text
 
 
 def _predict_proba_by_character(model, text_starter, character_list_in_train_text):
-    one_hot_encoded_character_sequence = data_processor.get_sequence_of_one_hot_encoded_character(
-        text_starter,
-        character_list_in_train_text
-    )
-    shape_with_batch = (1,) + one_hot_encoded_character_sequence.shape
-    updated_one_hot_encoded_character_sequence = np.reshape(one_hot_encoded_character_sequence, shape_with_batch)
+    encoded_character_sequence = [character_list_in_train_text.index(char) for char in text_starter]
+    encoded_character_sequence = np.array(encoded_character_sequence)
+    shape_with_batch = (1,) + encoded_character_sequence.shape
+    updated_one_hot_encoded_character_sequence = np.reshape(encoded_character_sequence, shape_with_batch)
     one_hot_encoded_prediction = model.predict(updated_one_hot_encoded_character_sequence, verbose=0)[0]
     return one_hot_encoded_prediction
 
