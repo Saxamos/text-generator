@@ -1,6 +1,6 @@
 import numpy as np
 
-from text_generator.data_processor.pre_processor import prepare_training_data, _create_sequences_with_associated_labels
+from text_generator.data_processor.pre_processor import _split_text_into_sequences, _create_sequences_with_associated_labels
 
 
 class TestPrepareTrainingData:
@@ -12,7 +12,7 @@ class TestPrepareTrainingData:
         skip_rate = 3
 
         # When
-        x_train_sequences, y_train_sequences = prepare_training_data(
+        x_train_sequences, y_train_sequences = _split_text_into_sequences(
             training_data, character_list_in_training_data, sequence_length, skip_rate)
 
         # Then

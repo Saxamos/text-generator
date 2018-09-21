@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from text_generator.neural_network.neural_network import load_pre_trained_model, train_the_model, generate_model
-from text_generator.predictor.predictor import predict
+from text_generator.model.model import load_pre_trained_model, _train_model, create_and_train_the_model
+from text_generator.prediction.prediction import predict
 
 # np.random.seed(seed=42)
 
@@ -75,14 +75,14 @@ class TestPredictWithNewModel:
     def setup_class(self):
         sequence_length = 3
         self.character_list_in_train_text = ['y', 'z']
-        self.model = generate_model(sequence_length, len(self.character_list_in_train_text))
+        self.model = create_and_train_the_model(sequence_length, len(self.character_list_in_train_text))
         x_train_sequences = np.array([[[1, 0], [0, 1], [0, 1]],
                                       [[1, 0], [0, 1], [0, 1]],
                                       [[1, 0], [1, 0], [0, 1]]])
         y_train_sequences = np.array([[0, 1], [0, 1], [1, 0]])
         epoch_number = 1
         self.batch_size = 1
-        train_the_model(self.model, x_train_sequences, y_train_sequences, epoch_number, self.batch_size)
+        _train_model(self.model, x_train_sequences, y_train_sequences, epoch_number, self.batch_size)
         self.prediction_length = 4
 
     def test_return_a_text_prediction(self):

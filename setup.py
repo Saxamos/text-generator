@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 from setuptools import find_packages
 from setuptools import setup
 
@@ -14,11 +12,13 @@ setup(
     author='Saxamos',
     install_requires=[
         'click',
-        'tensorflow',
         'keras',
         'numpy',
         'unidecode'
     ],
+    extras_require={
+        'dev': ['pytest']
+    },
     entry_points={
         'console_scripts': [
             'run=text_generator.manager:run'
