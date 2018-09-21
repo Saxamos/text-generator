@@ -1,5 +1,5 @@
 import numpy as np
-from keras import Sequential
+from tensorflow.keras import Sequential
 
 from text_generator.model.model import load_pre_trained_model, _train_model, create_and_train_the_model
 

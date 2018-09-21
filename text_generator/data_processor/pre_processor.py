@@ -3,6 +3,8 @@ import os
 import numpy as np
 from unidecode import unidecode
 
+from text_generator import ROOT_DIR
+
 
 def preprocess_data(data_dir_name, sequence_length):
     training_data, character_list_in_training_data = _sanitize_input_text(data_dir_name)
@@ -17,7 +19,7 @@ def preprocess_data(data_dir_name, sequence_length):
 # TODO: refactor me
 def _sanitize_input_text(data_dir_name):
     training_data = []
-    input_text_path = os.path.join('data', data_dir_name)
+    input_text_path = os.path.join(ROOT_DIR, 'data', data_dir_name)
     for filename in os.listdir(input_text_path):
         if filename.endswith('.txt'):
             with open(input_text_path + '/' + filename) as input_text:

@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name='text_generator',
-    version='0.0.1',
+    version='1.0.0',
     packages=find_packages(exclude=['tests']),
     license='MIT',
     description='A RNN for text generation',
@@ -11,8 +11,8 @@ setup(
     url='http://github.com/Saxamos/text_generator',
     author='Saxamos',
     install_requires=[
+        'tensorflow',
         'click',
-        'keras',
         'numpy',
         'unidecode'
     ],

@@ -1,11 +1,10 @@
 import click
 
-from text_generator.model.model import Model
 from text_generator.prediction import prediction
 from text_generator.training import training
 
 DEFAULT_DATA_DIR_NAME = 'small_data_for_test'
-TEXT_STARTER = 'start sentence of length thirt'
+TEXT_STARTER = 'start sentence sentence senten'
 
 
 @click.group()
@@ -19,7 +18,7 @@ def run():
 @click.option('--epoch-number', default=50, help='Number of iteration for the training.')
 @click.option('--batch-size', default=200, help='Number of sequences by batch.')
 def train(data_dir_name, sequence_length, epoch_number, batch_size):
-    training.train_model(Model(), data_dir_name, sequence_length, epoch_number, batch_size)
+    training.create_and_train_model(data_dir_name, sequence_length, epoch_number, batch_size)
 
 
 @run.command()
@@ -30,9 +29,9 @@ def train(data_dir_name, sequence_length, epoch_number, batch_size):
                                                  'temperature the predictions will be more original, but with'
                                                  ' possibly more mistakes')
 def predict(data_dir_name, text_starter, prediction_length, temperature):
-    prediction.predict_text(data_dir_name, text_starter, prediction_length, temperature)
+    prediction.load_model_and_predict_text(data_dir_name, text_starter, prediction_length, temperature)
 
-# TODO: remove and redo venv
+# TODO: abs path everywhere
 # TODO: print => log
 # TODO: remonter toutes les dép
 # TODO: README
