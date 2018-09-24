@@ -1,46 +1,49 @@
-import json
-import os
-
-import numpy as np
-from tensorflow.keras.models import load_model
-
-from text_generator import ROOT_DIR
-
-
-def load_model_and_predict_text(data_dir_name, text_starter, prediction_length, temperature):
+def load_model_and_predict_text(data_dir_name, text_starter, prediction_length, temperature, context):
     # read character_list_in_training_data
-    character_list_in_training_data_path = os.path.join(ROOT_DIR, 'models', data_dir_name,
-                                                        'character_list_in_training_data.json')
-    with open(character_list_in_training_data_path) as json_data:
-        character_list_in_training_data = json.load(json_data)
+    model_path = context['join_path'](
+        context['root_dir'],
+        'models',
+        data_dir_name
+    )
+    with open(context['join_path'](model_path, 'character_list_in_training_data.json')) as json_data:
+        character_list_in_training_data = context['load_json'](json_data)
 
     # load model
-    trained_model_path = os.path.join(ROOT_DIR, 'models', data_dir_name, 'model.hdf5')
-    model = load_model(trained_model_path)
+    trained_model_path = context['join_path'](model_path, 'model.hdf5')
+    model = context['load_model'](trained_model_path)
 
     # preprocess text_starter
-    encoded_text_starter_sequence = np.array([character_list_in_training_data.index(char) for char in text_starter])
+    encoded_prediction = [character_list_in_training_data.index(char) for char in text_starter]
 
     # loop: predict & proba to int
-    for i in range(prediction_length):
-        proba_by_character_array = model.predict(np.expand_dims(encoded_text_starter_sequence[i:], axis=0))[0]
-        next_char_index = _sample(proba_by_character_array, temperature)
-        encoded_text_starter_sequence = np.append(encoded_text_starter_sequence, next_char_index)
+    for _ in range(prediction_length):
+        character_probabilities = \
+        model.predict(context['expand_dims'](encoded_prediction[-len(text_starter):], axis=0))[0]
+        next_character_index = _sample(character_probabilities, temperature, context)
+        encoded_prediction = context['append'](encoded_prediction, next_character_index)
 
     # postprocess data
-    prediction = [character_list_in_training_data[index] for index in encoded_text_starter_sequence]
-    print(prediction)
-    return ''.join(prediction)
+    prediction = ''.join([character_list_in_training_data[index] for index in encoded_prediction])
+
+    # write pred in file
+    with open(context['join_path'](model_path, 'prediction.txt'), 'w') as f:
+        f.write(prediction)
+
+    return prediction
 
 
-def _sample(proba_by_character_array, temperature):
-    np.random.seed(43)
-    proba_by_character_array = proba_by_character_array.astype('float64')
-    temperatured_proba_by_character_array = _transform_proba_with_temperature(proba_by_character_array, temperature)
-    draw_array = np.random.multinomial(1, temperatured_proba_by_character_array)
-    return np.argmax(draw_array)
+def _sample(character_probabilities, temperature, context):
+    character_probabilities = character_probabilities.astype('float64')
+    temperatured_character_probabilities = _transform_proba_with_temperature(
+        character_probabilities,
+        temperature,
+        context
+    )
+    number_of_draw = 1
+    draw_array = context['multinomial'](number_of_draw, temperatured_character_probabilities)
+    return context['argmax'](draw_array)
 
 
-def _transform_proba_with_temperature(probability_by_character_array_1, temperature):
-    number_by_character_array = np.exp(np.log(probability_by_character_array_1) / temperature)
-    return number_by_character_array / np.sum(number_by_character_array)
+def _transform_proba_with_temperature(probability_by_character_array_1, temperature, context):
+    number_by_character_array = context['exp'](context['log'](probability_by_character_array_1) / temperature)
+    return number_by_character_array / context['sum'](number_by_character_array)
