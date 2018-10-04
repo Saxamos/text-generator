@@ -37,4 +37,6 @@ def predict(data_dir_name, text_starter, prediction_length, temperature):
 # TODO: README
 # TODO: makefile
 # TODO: générer un fichier audio avec google api ?
-
+# TODO: clean automatic du model dir
+# TODO: makefile
+# TODO: readme: tensorboard --logdir logs
