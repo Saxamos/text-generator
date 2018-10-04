@@ -4,7 +4,7 @@ from text_generator import context
 from text_generator.prediction import prediction
 from text_generator.training import training
 
-DEFAULT_DATA_DIR_NAME = 'small_data_for_test'
+DEFAULT_DATA_DIR_NAME = 'zweig'
 TEXT_STARTER = 'start sentence sentence senten'
 
 
@@ -27,8 +27,8 @@ def train(data_dir_name, sequence_length, epoch_number, batch_size):
 @click.option('--text-starter', default=TEXT_STARTER, help='Beginning of the text for the prediction.')
 @click.option('--prediction-length', default=20, help='Length of the desired text to be predicted.')
 @click.option('--temperature', default=0.3, help='A low temperature will give something conservative. With a high '
-                                                 'temperature the predictions will be more original, but with'
-                                                 ' potentially more mistakes')
+                                                 'temperature the predictions will be more original, but with '
+                                                 'potentially more mistakes')
 def predict(data_dir_name, text_starter, prediction_length, temperature):
     pred = prediction.load_model_and_predict_text(data_dir_name, text_starter, prediction_length, temperature, context)
     click.echo(click.style(pred, blink=True, bold=True, fg='cyan'))
