@@ -1,35 +1,23 @@
+from text_generator.tools.tools import load_model_and_character_list_in_training_data, write_prediction_in_file
+
+
 def load_model_and_predict_text(data_dir_name, text_starter, prediction_length, temperature, context):
-    # read character_list_in_training_data
-    model_path = context['join_path'](
-        context['root_dir'],
-        'models',
-        data_dir_name
-    )
-    with open(context['join_path'](model_path, 'character_list_in_training_data.json')) as json_data:
-        character_list_in_training_data = context['load_json'](json_data)
+    model, character_list_in_training_data = load_model_and_character_list_in_training_data(data_dir_name, context)
+    encoded_text_starter = [character_list_in_training_data.index(char) for char in text_starter]
+    encoded_prediction = predict(model, encoded_text_starter, prediction_length, temperature, context)
+    prediction = ''.join([character_list_in_training_data[index] for index in encoded_prediction])
+    write_prediction_in_file(data_dir_name, prediction, context)
+    return prediction
 
-    # load model
-    trained_model_path = context['join_path'](model_path, 'model.hdf5')
-    model = context['load_model'](trained_model_path)
 
-    # preprocess text_starter
-    encoded_prediction = [character_list_in_training_data.index(char) for char in text_starter]
-
-    # loop: predict & proba to int
+def predict(model, encoded_text_starter, prediction_length, temperature, context):
+    encoded_prediction = encoded_text_starter.copy()
     for _ in range(prediction_length):
         character_probabilities = \
-        model.predict(context['expand_dims'](encoded_prediction[-len(text_starter):], axis=0))[0]
+            model.predict(context['expand_dims'](encoded_prediction[-len(encoded_text_starter):], axis=0))[0]
         next_character_index = _sample(character_probabilities, temperature, context)
         encoded_prediction = context['append'](encoded_prediction, next_character_index)
-
-    # postprocess data
-    prediction = ''.join([character_list_in_training_data[index] for index in encoded_prediction])
-
-    # write pred in file
-    with open(context['join_path'](model_path, 'prediction.txt'), 'w') as f:
-        f.write(prediction)
-
-    return prediction
+    return encoded_prediction
 
 
 def _sample(character_probabilities, temperature, context):

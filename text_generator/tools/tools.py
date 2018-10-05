@@ -15,3 +15,19 @@ def write_character_list_in_training_data(character_list_in_training_data, model
     json_path = context['join_path'](context['root_dir'], model_dir_path, 'character_list_in_training_data.json')
     with open(json_path, 'w') as outfile:
         context['dump_json'](character_list_in_training_data, outfile)
+
+
+def load_model_and_character_list_in_training_data(data_dir_name, context):
+    model_path = context['join_path'](context['root_dir'], 'models', data_dir_name)
+    with open(context['join_path'](model_path, 'character_list_in_training_data.json')) as json_data:
+        character_list_in_training_data = context['load_json'](json_data)
+
+    trained_model_path = context['join_path'](model_path, 'model.hdf5')
+    model = context['load_model'](trained_model_path)
+    return model, character_list_in_training_data
+
+
+def write_prediction_in_file(data_dir_name, prediction, context):
+    model_path = context['join_path'](context['root_dir'], 'models', data_dir_name)
+    with open(context['join_path'](model_path, 'prediction.txt'), 'w') as f:
+        f.write(prediction)
