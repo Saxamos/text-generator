@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-from text_generator import context
+from text_generator import Dependencies
 from text_generator.prediction import prediction
 
 
@@ -14,11 +14,9 @@ def multinomial_mock(number_of_draw, probabilities):
 
 class TestLoadModelAndPredictText:
     def setup_method(self):
-        self.context = context
-        self.context.update({
-            'multinomial': multinomial_mock,
-            'root_dir': os.path.abspath(os.path.join(__file__, '../..'))
-        })
+        self.dependencies = Dependencies
+        self.dependencies.multinomial = multinomial_mock
+        self.dependencies.root_dir = os.path.abspath(os.path.join(__file__, '../..'))
 
     def test_acceptance(self):
         # Given
@@ -33,7 +31,7 @@ class TestLoadModelAndPredictText:
             text_starter,
             prediction_length,
             temperature,
-            context
+            self.dependencies
         )
 
         # Then

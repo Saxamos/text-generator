@@ -2,16 +2,14 @@ import os
 
 from tensorflow.python.keras import Sequential
 
-from text_generator import context
+from text_generator import Dependencies
 from text_generator.training import training
 
 
 class TestCreateAndTrainModel:
     def setup_method(self):
-        self.context = context
-        self.context.update({
-            'root_dir': os.path.abspath(os.path.join(__file__, '../..')),
-        })
+        self.dependencies = Dependencies
+        self.dependencies.root_dir = os.path.abspath(os.path.join(__file__, '../..'))
 
     def test_acceptance_training(self):
         # Given
@@ -21,7 +19,8 @@ class TestCreateAndTrainModel:
         batch_size = 3
 
         # When
-        result = training.create_and_train_model(data_dir_name, sequence_length, epoch_number, batch_size, self.context)
+        result = training.create_and_train_model(data_dir_name, sequence_length, epoch_number, batch_size,
+                                                 self.dependencies)
 
         # Then
         # TODO: fixer seed et faire ça :

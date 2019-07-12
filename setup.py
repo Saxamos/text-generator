@@ -21,7 +21,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'run=text_generator.manager:run'
+            'run=text_generator.__main__:run'
         ]
     },
 )

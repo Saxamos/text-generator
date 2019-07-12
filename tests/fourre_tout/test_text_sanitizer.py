@@ -30,7 +30,7 @@
 #                                 "*******************************\n")
 #
 #
-# # TODO: comment tester "sanitize_input_text" with context
+# # TODO: comment tester "sanitize_input_text" with dependencies
 #
 # class TestSanitize:
 #     def test_reduce_character_cardinal(self):

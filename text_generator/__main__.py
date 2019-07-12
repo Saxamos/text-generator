@@ -1,6 +1,6 @@
 import click
 
-from text_generator import context
+from text_generator import Dependencies
 from text_generator.prediction import prediction
 from text_generator.training import training
 
@@ -19,7 +19,7 @@ def run():
 @click.option('--epoch-number', default=50, help='Number of iteration for the training.')
 @click.option('--batch-size', default=200, help='Number of sequences by batch.')
 def train(data_dir_name, sequence_length, epoch_number, batch_size):
-    training.create_and_train_model(data_dir_name, sequence_length, epoch_number, batch_size, context)
+    training.create_and_train_model(data_dir_name, sequence_length, epoch_number, batch_size, Dependencies)
 
 
 @run.command()
@@ -30,9 +30,11 @@ def train(data_dir_name, sequence_length, epoch_number, batch_size):
                                                  'temperature the predictions will be more original, but with '
                                                  'potentially more mistakes')
 def predict(data_dir_name, text_starter, prediction_length, temperature):
-    pred = prediction.load_model_and_predict_text(data_dir_name, text_starter, prediction_length, temperature, context)
+    pred = prediction.load_model_and_predict_text(data_dir_name, text_starter, prediction_length, temperature,
+                                                  Dependencies)
     click.echo(click.style(pred, blink=True, bold=True, fg='cyan'))
 
+# TODO: créer sécu sur le prediciton length (ecrire lors du train puis try except lors du predict)
 # TODO: tests
 # TODO: README
 # TODO: makefile

@@ -1,23 +1,23 @@
-def preprocess_data(data_dir_name, sequence_length, context):
-    input_text, character_list_in_training_data = _sanitize_input_text(data_dir_name, context)
+def preprocess_data(data_dir_name, sequence_length, dependencies):
+    input_text, character_list_in_training_data = _sanitize_input_text(data_dir_name, dependencies)
     x_train_sequences, y_train_sequences = _split_text_into_sequences(
         input_text,
         character_list_in_training_data,
         sequence_length,
-        context
+        dependencies
     )
     return x_train_sequences, y_train_sequences, character_list_in_training_data
 
 
 # TODO: refactor me
-def _sanitize_input_text(data_dir_name, context):
+def _sanitize_input_text(data_dir_name, dependencies):
     training_data = []
-    input_text_path = context['join_path'](context['root_dir'], 'data', data_dir_name)
-    for filename in context['listdir'](input_text_path):
+    input_text_path = dependencies.join_path(dependencies.root_dir, 'data', data_dir_name)
+    for filename in dependencies.listdir(input_text_path):
         if filename.endswith('.txt'):
             with open(input_text_path + '/' + filename) as input_text:
                 for line in input_text:
-                    line = context['unidecode'](line.lower())
+                    line = dependencies.unidecode(line.lower())
                     training_data.append(line)
     training_data = '\n'.join(training_data)
 
@@ -34,20 +34,20 @@ def _sanitize_input_text(data_dir_name, context):
     return training_data, new_character_list_in_training_data
 
 
-def _split_text_into_sequences(input_text, character_list_in_training_data, sequence_length, context):
+def _split_text_into_sequences(input_text, character_list_in_training_data, sequence_length, dependencies):
     encoded_input_text = [character_list_in_training_data.index(char) for char in input_text]
     x_train_sequences, y_train_sequences = _create_sequences_with_associated_labels(
         encoded_input_text,
         sequence_length,
-        context
+        dependencies
     )
-    one_hot_y_train_sequences = context['zeros']((len(y_train_sequences), len(character_list_in_training_data)))
+    one_hot_y_train_sequences = dependencies.zeros((len(y_train_sequences), len(character_list_in_training_data)))
     for i in range(len(one_hot_y_train_sequences)):
         one_hot_y_train_sequences[i][y_train_sequences[i]] = 1
     return x_train_sequences, one_hot_y_train_sequences
 
 
-def _create_sequences_with_associated_labels(input_text, sequence_length, context):
+def _create_sequences_with_associated_labels(input_text, sequence_length, dependencies):
     x_train_sequences = [input_text[i - sequence_length:i] for i in range(sequence_length, len(input_text))]
     y_train_sequences = [input_text[i] for i in range(sequence_length, len(input_text))]
-    return context['to_numpy'](x_train_sequences), context['to_numpy'](y_train_sequences)
+    return dependencies.to_numpy(x_train_sequences), dependencies.to_numpy(y_train_sequences)
