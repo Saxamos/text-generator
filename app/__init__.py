@@ -5,8 +5,8 @@ from numpy import exp, sum, log, zeros, argmax, append, array, expand_dims, rand
 from tensorflow.python.keras import callbacks, layers, models
 from unidecode import unidecode
 
-from text_generator.prediction import prediction
-from text_generator.training import training
+from app.prediction import prediction
+from app.training import training
 
 
 class Dependencies:

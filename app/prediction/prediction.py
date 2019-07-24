@@ -1,4 +1,4 @@
-from text_generator.tools.tools import load_model_and_character_list_in_training_data, write_prediction_in_file
+from app.tools.tools import load_model_and_character_list_in_training_data, write_prediction_in_file
 
 
 def load_model_and_predict_text(data_dir_name, text_starter, prediction_length, temperature, dependencies):

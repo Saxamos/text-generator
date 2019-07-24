@@ -2,8 +2,8 @@ import os
 
 from tensorflow.python.keras import Sequential
 
-from text_generator import Dependencies
-from text_generator.training import training
+from app import Dependencies
+from app.training import training
 
 
 class TestCreateAndTrainModel:

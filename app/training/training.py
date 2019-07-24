@@ -1,6 +1,6 @@
-from text_generator.data_processor import pre_processor
-from text_generator.model import model
-from text_generator.tools.tools import create_model_dir, write_character_list_in_training_data
+from app.data_processor import pre_processor
+from app.model import model
+from app.tools.tools import create_model_dir, write_character_list_in_training_data
 
 
 def create_and_train_model(data_dir_name, sequence_length, epoch_number, batch_size, dependencies):

@@ -1,7 +1,3 @@
-
-
-
-
 # Récupération des activations (valeurs) d'une couche donnée
 def predict_activations(complete_model, predicted_paragraph, tar_layer):
     activations = []

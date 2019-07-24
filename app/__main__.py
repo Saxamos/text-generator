@@ -1,8 +1,8 @@
 import click
 
-from text_generator import Dependencies
-from text_generator.prediction import prediction
-from text_generator.training import training
+from app import Dependencies
+from app.prediction import prediction
+from app.training import training
 
 DEFAULT_DATA_DIR_NAME = 'zweig'
 TEXT_STARTER = 'start sentence sentence senten'
@@ -34,11 +34,11 @@ def predict(data_dir_name, text_starter, prediction_length, temperature):
                                                   Dependencies)
     click.echo(click.style(pred, blink=True, bold=True, fg='cyan'))
 
-# TODO: créer sécu sur le prediciton length (ecrire lors du train puis try except lors du predict)
-# TODO: tests
-# TODO: README
-# TODO: makefile
-# TODO: générer un fichier audio avec google api ?
-# TODO: clean automatic du model dir
-# TODO: makefile
-# TODO: readme: tensorboard --logdir logs
+
+if __name__ == '__main__':
+    run()
+
+# TODO: Generate audio file with google api on predictions
+# TODO: Automatically clean created dir
+# TODO: readme document "tensorboard --logdir logs"
+# TODO: Add viz on interesting neurons

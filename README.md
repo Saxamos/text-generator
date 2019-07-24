@@ -13,8 +13,8 @@ The aim of this project is to apply clean code techniques on a deep learning pro
 ```
 python3.6 -m venv venv
 source venv/bin/activate
-pip install -e .[dev]
-pytest -vv
+pip install -e .
+venv/bin/pytest -vv tests
 ```
 
 Note: zsh users need to escape square brackets: `pip install -e .\[dev\]`
@@ -30,7 +30,7 @@ To train your model with your own data:
     * `--epoch-number` is the number of iteration
     * `--batch-size`: a big batch-size allows GPU to be used more efficiently
 ```
-run train --data-dir-name=zweig --sequence-length=20 --epoch-number=1000 --batch-size=300
+python -m app.__main__ train --data-dir-name=zweig --sequence-length=20 --epoch-number=1000 --batch-size=300
 ```
 * Once trained, get your models checkpoints in `models/zweig/checkpoints` *(replace zweig with your dir name)*
 * You can also find the character list: `models/zweig/character_list_in_training_data.json` *(replace zweig with your dir name)*
@@ -49,6 +49,6 @@ To predict a text with your best model:
     * `--prediction-length` is the length of the desired text prediction
     * `--temperature`: A low temperature will give something conservative. With a high temperature the predictions will be more original, but with potentially more mistakes.
 ```
-run predict --data-dir-name=zweig --text-starter="starter of lenght 20" --prediction-length=1000 --batch-size=300
+python -m app.__main__ predict --data-dir-name=zweig --text-starter="starter of lenght 20" --prediction-length=1000 --batch-size=300
 ```
 * The prediction will be prompted and written in `models/zweig/prediction.txt` *(replace zweig with your dir name)*

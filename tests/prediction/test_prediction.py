@@ -2,8 +2,8 @@ import os
 
 import numpy as np
 
-from text_generator import Dependencies
-from text_generator.prediction import prediction
+from app import Dependencies
+from app.prediction import prediction
 
 
 def multinomial_mock(number_of_draw, probabilities):
