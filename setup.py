@@ -10,18 +10,9 @@ setup(
     long_description=open('README.md').read(),
     url='http://github.com/Saxamos/text_generator',
     author='Saxamos',
-    install_requires=[
-        'tensorflow',
-        'click',
-        'numpy',
-        'unidecode'
-    ],
-    extras_require={
-        'dev': ['pytest']
-    },
     entry_points={
         'console_scripts': [
-            'run=text_generator.__main__:run'
+            'run=app.__main__:run'
         ]
     },
 )
